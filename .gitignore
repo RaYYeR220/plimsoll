@@ -1,0 +1,49 @@
+# dependencies
+node_modules/
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+
+# build output
+dist/
+build/
+out/
+target/
+.next/
+*.tsbuildinfo
+*.wasm
+
+# environment / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.substreams.env
+
+# test / coverage
+coverage/
+cache/
+artifacts/
+typechain-types/
+.forge-cache/
+
+# editors / os
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# working notes, design exploration and strategy material
+internal/
+*-internal/
+notes/
+scratch/
+ui-prototypes/
+mockups/
+design-ref/
+variants/
+design-brief.md
+*-backup*
+*.bundle
