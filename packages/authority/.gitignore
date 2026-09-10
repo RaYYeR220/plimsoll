@@ -1,0 +1,10 @@
+node_modules/
+dist/
+out/
+cache/
+lib/
+dependencies/
+soldeer.lock
+.env
+artifacts/
+demo/screens/
