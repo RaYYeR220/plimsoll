@@ -1,0 +1,19 @@
+{
+  "noteId": "NOTE-HOTEL",
+  "holder": "0x00000000000000000000000000000000006f1a55",
+  "nominatedVaults": [],
+  "notesOutstanding": "50000",
+  "parPerNote": "1000000",
+  "unitDecimals": 6,
+  "asOfBlock": "21480360",
+  "observedAt": -8,
+  "sourceSet": {
+    "kind": "fixture",
+    "dataset": "plimsoll-vault-flows-v0.3.1",
+    "endpoints": [
+      "fixture://plimsoll/primary",
+      "fixture://plimsoll/secondary"
+    ]
+  },
+  "positions": []
+}

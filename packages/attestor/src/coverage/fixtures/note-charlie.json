@@ -1,0 +1,30 @@
+{
+  "noteId": "NOTE-CHARLIE",
+  "holder": "0x00000000000000000000000000000000006f1a55",
+  "nominatedVaults": [
+    "0x4626aa11c0ffee0000000000000000000000a001"
+  ],
+  "notesOutstanding": "80000",
+  "parPerNote": "1000000",
+  "unitDecimals": 6,
+  "asOfBlock": "21480320",
+  "observedAt": -30,
+  "sourceSet": {
+    "kind": "fixture",
+    "dataset": "plimsoll-vault-flows-v0.3.1",
+    "endpoints": [
+      "fixture://plimsoll/primary",
+      "fixture://plimsoll/secondary"
+    ]
+  },
+  "positions": [
+    {
+      "vault": "0x4626aa11c0ffee0000000000000000000000a001",
+      "shares": "100000000000",
+      "declaredShares": "150000000000",
+      "assets": "105000000000",
+      "assetDecimals": 6,
+      "blockNumber": "21480320"
+    }
+  ]
+}

@@ -6,10 +6,14 @@ node_modules/
 !.yarn/releases
 
 # build output
-dist/
-build/
-out/
-target/
+/dist/
+packages/*/dist/
+/build/
+packages/*/build/
+/out/
+packages/*/out/
+/target/
+packages/*/target/
 .next/
 *.tsbuildinfo
 *.wasm
@@ -23,9 +27,12 @@ target/
 .substreams.env
 
 # test / coverage
-coverage/
-cache/
-artifacts/
+/coverage/
+packages/*/coverage/
+/cache/
+packages/*/cache/
+/artifacts/
+packages/*/artifacts/
 typechain-types/
 .forge-cache/
 
@@ -38,8 +45,8 @@ Thumbs.db
 # working notes, design exploration and strategy material
 internal/
 *-internal/
-notes/
-scratch/
+/notes/
+/scratch/
 ui-prototypes/
 mockups/
 design-ref/

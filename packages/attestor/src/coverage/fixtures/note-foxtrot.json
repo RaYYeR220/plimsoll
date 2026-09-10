@@ -1,0 +1,29 @@
+{
+  "noteId": "NOTE-FOXTROT",
+  "holder": "0x00000000000000000000000000000000006f1a55",
+  "nominatedVaults": [
+    "0x4626dd44f3c7030000000000000000000000d004"
+  ],
+  "notesOutstanding": "100000",
+  "parPerNote": "1000000",
+  "unitDecimals": 6,
+  "asOfBlock": "21480340",
+  "observedAt": -15,
+  "sourceSet": {
+    "kind": "fixture",
+    "dataset": "plimsoll-vault-flows-v0.3.1",
+    "endpoints": [
+      "fixture://plimsoll/primary",
+      "fixture://plimsoll/secondary"
+    ]
+  },
+  "positions": [
+    {
+      "vault": "0x4626dd44f3c7030000000000000000000000d004",
+      "shares": "120000000000",
+      "assets": null,
+      "assetDecimals": 6,
+      "blockNumber": "21480340"
+    }
+  ]
+}

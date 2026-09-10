@@ -1,0 +1,37 @@
+{
+  "noteId": "NOTE-BRAVO",
+  "holder": "0x00000000000000000000000000000000006f1a55",
+  "nominatedVaults": [
+    "0x4626aa11c0ffee0000000000000000000000a001",
+    "0x4626bb22d1a5e10000000000000000000000b002"
+  ],
+  "notesOutstanding": "250000",
+  "parPerNote": "1000000",
+  "unitDecimals": 6,
+  "asOfBlock": "21480315",
+  "observedAt": -45,
+  "sourceSet": {
+    "kind": "fixture",
+    "dataset": "plimsoll-vault-flows-v0.3.1",
+    "endpoints": [
+      "fixture://plimsoll/primary",
+      "fixture://plimsoll/secondary"
+    ]
+  },
+  "positions": [
+    {
+      "vault": "0x4626aa11c0ffee0000000000000000000000a001",
+      "shares": "95000000000",
+      "assets": "100000000000",
+      "assetDecimals": 6,
+      "blockNumber": "21480315"
+    },
+    {
+      "vault": "0x4626bb22d1a5e10000000000000000000000b002",
+      "shares": "110000000000",
+      "assets": "117500000000",
+      "assetDecimals": 6,
+      "blockNumber": "21480315"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "name": "@plimsoll/attestor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Paid coverage attestation for Plimsoll notes: an x402-gated endpoint that returns a signed attestation, or a signed refusal at no charge when coverage cannot be proven.",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "MOCKS.md"
+  ],
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node -e \"require('node:fs').cpSync('src/coverage/fixtures','dist/src/coverage/fixtures',{recursive:true})\"",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "serve": "npm run build && node --env-file-if-exists=.env dist/src/server.js",
+    "buyer": "npm run build && node --env-file-if-exists=.env dist/src/buyer.js",
+    "demo": "npm run build && node dist/demo/offline.js",
+    "verify-charge": "npm run build && node dist/bin/verify-charge.js",
+    "test": "npm run build && node --env-file-if-exists=.env --test \"dist/test/*.test.js\"",
+    "test:offline": "npm run build && node --test \"dist/test/!(live).test.js\"",
+    "register": "npm run build && node --env-file-if-exists=.env dist/bin/register-agent.js"
+  },
+  "dependencies": {
+    "@hiero-ledger/sdk": "2.85.0",
+    "@x402/core": "^2.25.0",
+    "@x402/express": "^2.25.0",
+    "@x402/fetch": "^2.25.0",
+    "@x402/hedera": "^2.25.0",
+    "express": "^4.21.2",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.7.0",
+    "typescript": "^5.6.0"
+  }
+}

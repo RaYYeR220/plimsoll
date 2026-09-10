@@ -1,0 +1,26 @@
+{
+  "noteId": "NOTE-INDIA",
+  "holder": "0x00000000000000000000000000000000006f1a55",
+  "nominatedVaults": [
+    "0x4626aa11c0ffee0000000000000000000000a001"
+  ],
+  "notesOutstanding": "100000",
+  "parPerNote": "1000000",
+  "unitDecimals": 6,
+  "asOfBlock": "21480370",
+  "observedAt": -5,
+  "sourceSet": {
+    "kind": "unreachable",
+    "dataset": "plimsoll-vault-flows-v0.3.1",
+    "endpoints": []
+  },
+  "positions": [
+    {
+      "vault": "0x4626aa11c0ffee0000000000000000000000a001",
+      "shares": "120000000000",
+      "assets": "130000000000",
+      "assetDecimals": 6,
+      "blockNumber": "21480370"
+    }
+  ]
+}

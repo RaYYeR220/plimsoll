@@ -1,0 +1,30 @@
+{
+  "noteId": "NOTE-ECHO",
+  "holder": "0x00000000000000000000000000000000006f1a55",
+  "nominatedVaults": [
+    "0x4626cc33e2b6f20000000000000000000000c003"
+  ],
+  "notesOutstanding": "100000",
+  "parPerNote": "1000000",
+  "unitDecimals": 6,
+  "asOfBlock": "21480330",
+  "observedAt": -20,
+  "sourceSet": {
+    "kind": "fixture",
+    "dataset": "plimsoll-vault-flows-v0.3.1",
+    "endpoints": [
+      "fixture://plimsoll/primary",
+      "fixture://plimsoll/secondary"
+    ]
+  },
+  "positions": [
+    {
+      "vault": "0x4626cc33e2b6f20000000000000000000000c003",
+      "shares": "115000000000",
+      "assets": "120000000000",
+      "secondaryAssets": "131000000000",
+      "assetDecimals": 6,
+      "blockNumber": "21480330"
+    }
+  ]
+}

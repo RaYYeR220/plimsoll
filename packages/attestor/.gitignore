@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+data/
+
+# The repository root ignores `coverage/` to keep test-coverage reports out of
+# the tree. That pattern matches any directory of that name at any depth, which
+# silently swallows src/coverage — the coverage engine and its fixtures, i.e.
+# the heart of this package. Re-include it here. The directory itself has to be
+# un-ignored before anything inside it can be, which is why both lines exist.
+!src/coverage/
+!src/coverage/**
