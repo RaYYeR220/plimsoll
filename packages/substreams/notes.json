@@ -1,0 +1,42 @@
+{
+  "version": 2,
+  "about": "Plimsoll note definitions, read by packages/mcp and packages/attestor. The file holds only what the chain cannot say: the network holding the backing, the vault list (the preimage of the vaultSetHash registered in CoverageOracle), whether the note is a negative control, and where the on-chain facts live. Everything else is read from the chain at the time of use and is never configured here: outstanding (the note's totalSupply), par (its nominalValue), the threshold (LoadLine) and the holder (the note's issuer, the sole ROLE_ISSUER member). Keys are noteId = keccak256(market). Run scripts/check_notes.py after every edit.",
+  "notes": {
+    "0x376011be372685b3e6d566a7ba172f8b8968ac7a6d56d23e67046e2fd24d253c": {
+      "market": "PLIM-A",
+      "network": "base",
+      "chainId": 8453,
+      "vaults": [],
+      "negativeControl": true,
+      "status": "placeholder",
+      "comment": "The negative control. Its real on-chain obligation is 10,000 notes at a nominal of 100.00, so $1,000,000 against roughly $15 of backing, and it must always refuse. Its registered vaultSetHash 0x2627c1d5... is sha256('plimsoll/vaults/v1'), a bootstrap placeholder, not the hash of any vault list; setVaultSet replaces it once the vaults are final.",
+      "registry": {
+        "chain": "hedera-testnet",
+        "chainId": 296,
+        "rpc": "https://testnet.hashio.io/api",
+        "mirror": "https://testnet.mirrornode.hedera.com/api/v1",
+        "coverageOracle": "0xce13de224ed918d7b8b2717492849e0a82648ca3",
+        "loadLine": "0xf867b6f41b21e9d72f327f867ae898620d022c80",
+        "note": "0xe2bf359650fbacc7d4801336f8c1fe7061ad6387"
+      }
+    },
+    "0xb51023289ff2160bbde35658811ef0a869f6e250819060253e6135bc9aaa2f48": {
+      "market": "PLIM-B",
+      "network": "base",
+      "chainId": 8453,
+      "vaults": [],
+      "negativeControl": false,
+      "status": "placeholder",
+      "comment": "The right-sized series: a $10.00 on-chain obligation (1,000 base units at 2 decimals, nominal 100 at 2 decimals) against roughly $15 of Base backing, so it is the note that should clear. ISIN US0000PLIMB4, Hedera 0.0.10482316.",
+      "registry": {
+        "chain": "hedera-testnet",
+        "chainId": 296,
+        "rpc": "https://testnet.hashio.io/api",
+        "mirror": "https://testnet.mirrornode.hedera.com/api/v1",
+        "coverageOracle": "0xce13de224ed918d7b8b2717492849e0a82648ca3",
+        "loadLine": "0xf867b6f41b21e9d72f327f867ae898620d022c80",
+        "note": "0xcf759c717e805413aaa7d067db7bd7a93969def2"
+      }
+    }
+  }
+}
