@@ -5,6 +5,9 @@ node_modules/
 !.yarn/patches
 !.yarn/releases
 
+# vendored Solidity dependencies (installed by clone, not tracked)
+packages/*/lib/
+
 # build output
 /dist/
 packages/*/dist/

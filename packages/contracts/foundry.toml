@@ -1,0 +1,37 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+test = "test"
+script = "script"
+solc_version = "0.8.28"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+# Sourcify matches on the embedded metadata hash, so it must stay in the bytecode.
+bytecode_hash = "ipfs"
+cbor_metadata = true
+gas_reports = ["CoverageOracle", "LoadLine", "BerthMarket", "CouponScheduler", "CashLegController"]
+
+[profile.default.fuzz]
+runs = 512
+
+[profile.default.invariant]
+runs = 128
+depth = 64
+fail_on_revert = false
+
+[profile.ci.fuzz]
+runs = 4096
+
+[profile.ci.invariant]
+runs = 512
+depth = 128
+
+[rpc_endpoints]
+hedera_testnet = "${HEDERA_RPC_URL}"
+
+[lint]
+# Consensus timestamps on Hedera are not a validator-controlled value the way this lint assumes,
+# and every use here is a coupon date or an order expiry measured in hours or days.
+exclude_lints = ["block-timestamp"]
