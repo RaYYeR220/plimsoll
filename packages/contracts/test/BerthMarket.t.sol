@@ -6,6 +6,7 @@ import { BerthMarket } from "../src/BerthMarket.sol";
 import { LoadLine } from "../src/LoadLine.sol";
 import { Coverage } from "../src/libraries/Coverage.sol";
 import { Preflight } from "../src/libraries/Preflight.sol";
+import { MockNote } from "./mocks/MockNote.sol";
 
 contract BerthMarketTest is Base {
     uint128 internal constant LOT = 1_000;
@@ -50,12 +51,37 @@ contract BerthMarketTest is Base {
         );
     }
 
-    function test_RevertWhen_PlacingWithoutOperatorRights() public {
+    function test_RevertWhen_PlacingWithoutAnAllowance() public {
         note.mint(PARTITION, outsider, LOT);
+        note.setKyc(outsider, true);
 
         vm.prank(outsider);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(MockNote.InsufficientAllowance.selector, address(market), outsider));
         market.placeAsk(address(note), NOTE_ID, PARTITION, LOT, PRICE, orderExpiry);
+    }
+
+    /// @notice Operator rights are what a bid needs; they are not enough to escrow an ask.
+    function test_RevertWhen_OperatorRightsAloneTryToEscrowAnAsk() public {
+        note.mint(PARTITION, outsider, LOT);
+        note.setKyc(outsider, true);
+        vm.prank(outsider);
+        note.authorizeOperatorByPartition(PARTITION, address(market));
+
+        vm.prank(outsider);
+        vm.expectRevert(abi.encodeWithSelector(MockNote.InsufficientAllowance.selector, address(market), outsider));
+        market.placeAsk(address(note), NOTE_ID, PARTITION, LOT, PRICE, orderExpiry);
+    }
+
+    function test_PlacingAnAskSpendsTheAllowance() public {
+        note.mint(PARTITION, outsider, LOT);
+        note.setKyc(outsider, true);
+        vm.prank(outsider);
+        note.approve(address(market), LOT);
+
+        vm.prank(outsider);
+        market.placeAsk(address(note), NOTE_ID, PARTITION, LOT, PRICE, orderExpiry);
+        assertEq(note.allowance(outsider, address(market)), 0, "the hold spent exactly the approved amount");
+        assertEq(note.heldOfByPartition(PARTITION, outsider), LOT);
     }
 
     function test_RevertWhen_PlacingWhileHalted() public {

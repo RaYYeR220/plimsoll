@@ -10,8 +10,12 @@ import { IAtsHold, IAtsOperator } from "../../src/interfaces/IAts.sol";
  * @dev Faithfulness matters more than completeness here, because these are the rules the market's
  *      correctness is argued from. The four that are modelled exactly, from the v8.0.0 sources:
  *
- *      - `createHoldFromByPartition` requires the caller to be an authorised operator for the
- *        holder's partition, and moves balance from available into held.
+ *      - `createHoldFromByPartition` spends an ERC-20 allowance the holder granted the caller, and
+ *        moves balance from available into held. Operator rights do not substitute for it: real ATS
+ *        refuses a third-party hold without allowance (`InsufficientAllowance`, via
+ *        `decreaseAllowedBalanceForHold`), which a fork dry-run against the live note confirmed.
+ *        An earlier version of this mock gated it on operator rights, and every ask test passed
+ *        against a rule ATS does not have.
  *      - `executeHoldByPartition` requires the caller to be the recorded escrow, refuses once the
  *        hold has expired, and accepts any destination when the hold recorded `to == address(0)`.
  *      - `releaseHoldByPartition` is legal only before expiry; `reclaimHoldByPartition` only after.
@@ -31,6 +35,7 @@ contract MockNote {
     error HoldExpirationReached();
     error HoldExpirationNotReached();
     error InvalidDestinationAddress(address holdDestination, address to);
+    error InsufficientAllowance(address spender, address from);
     error KpiDataAlreadyExists(uint256 date);
 
     bytes1 private constant EIP1066_DISALLOWED = 0x10;
@@ -47,6 +52,7 @@ contract MockNote {
     mapping(bytes32 => mapping(address => uint256)) public balanceOfByPartition;
     mapping(bytes32 => mapping(address => uint256)) public heldOfByPartition;
     mapping(bytes32 => mapping(address => mapping(address => bool))) private _operators;
+    mapping(address => mapping(address => uint256)) public allowance;
     mapping(bytes32 => mapping(address => mapping(uint256 => Hold))) private _holds;
     mapping(bytes32 => mapping(address => uint256)) private _nextHoldId;
 
@@ -80,6 +86,11 @@ contract MockNote {
 
     function setComplianceRefuses(bool value) external {
         complianceRefuses = value;
+    }
+
+    function approve(address spender, uint256 value) external returns (bool) {
+        allowance[msg.sender][spender] = value;
+        return true;
     }
 
     function authorizeOperatorByPartition(bytes32 partition, address operator) external {
@@ -129,11 +140,13 @@ contract MockNote {
         IAtsHold.Hold calldata hold,
         bytes calldata
     ) external returns (bool success_, uint256 holdId_) {
-        if (!_operators[partition][from][msg.sender]) revert NotOperator(msg.sender, from);
+        uint256 allowed = allowance[from][msg.sender];
+        if (allowed < hold.amount) revert InsufficientAllowance(msg.sender, from);
         if (blocked[from]) revert AccountIsBlocked(from);
 
         uint256 available = balanceOfByPartition[partition][from];
         if (available < hold.amount) revert InsufficientBalance(from, available, hold.amount);
+        allowance[from][msg.sender] = allowed - hold.amount;
 
         balanceOfByPartition[partition][from] = available - hold.amount;
         heldOfByPartition[partition][from] += hold.amount;

@@ -160,11 +160,15 @@ abstract contract Base is Test {
 
     // ------------------------------------------------------------------ market helpers
 
-    /// @notice Gives `holder` notes and lets the venue escrow them.
+    /// @notice Gives `holder` notes and lets the venue escrow and move them.
+    /// @dev A maker needs both. Asks are escrowed with a hold, which ATS funds from an ERC-20
+    ///      allowance; bids pull notes with operatorTransferByPartition, which needs operator rights.
     function _fundNotes(address holder, uint256 amount) internal {
         note.mint(PARTITION, holder, amount);
-        vm.prank(holder);
+        vm.startPrank(holder);
         note.authorizeOperatorByPartition(PARTITION, address(market));
+        note.approve(address(market), type(uint256).max);
+        vm.stopPrank();
     }
 
     function _fundCash(address who, uint256 amount, address spender) internal {
