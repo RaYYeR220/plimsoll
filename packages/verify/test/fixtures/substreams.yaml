@@ -1,0 +1,6 @@
+specVersion: v0.1.0
+package:
+  name: plimsoll_erc4626
+  version: v0.2.0
+  description: >-
+    Test fixture; only the package block is read.

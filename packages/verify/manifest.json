@@ -1,0 +1,38 @@
+{
+  "comment": "The only facts this package owns. Every address and contract id comes from packages/contracts/deployments/hedera-testnet.json at run time; this file holds what that record does not: the event window, the canonical HCS sequence numbers, the payment they cite, and where the two external claims live.",
+  "eventWindow": {
+    "start": "2026-09-04T12:00:00-04:00",
+    "label": "ETHOnline 2026 build window"
+  },
+  "hcs": {
+    "topicId": "0.0.10451091",
+    "refusalWindowSeconds": { "before": 120, "after": 300 },
+    "records": [
+      {
+        "sequence": 17,
+        "expect": "attested",
+        "noteId": "NOTE-ALPHA",
+        "payment": "0.0.7162784@1789121899.540907773"
+      },
+      {
+        "sequence": 18,
+        "expect": "asset-refusal",
+        "noteId": "NOTE-BRAVO",
+        "reason": "coverage_below_floor"
+      },
+      {
+        "sequence": 19,
+        "expect": "evidence-refusal",
+        "noteId": "NOTE-INDIA",
+        "reason": "source_unavailable"
+      }
+    ]
+  },
+  "github": {
+    "repository": "hedera-dev/hedera-harness",
+    "pullRequest": 55
+  },
+  "substreams": {
+    "manifest": "../substreams/substreams.yaml"
+  }
+}

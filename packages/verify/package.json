@@ -1,0 +1,23 @@
+{
+  "name": "@plimsoll/verify",
+  "version": "0.1.0",
+  "private": true,
+  "description": "One zero-credential command that checks every Plimsoll claim against public endpoints.",
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "bin": { "plimsoll-verify": "scripts/verify.mjs" },
+  "scripts": {
+    "verify": "node scripts/verify.mjs",
+    "setup": "node scripts/verify.mjs --setup-only",
+    "build": "tsc -p tsconfig.json",
+    "test": "node scripts/verify.mjs --setup-only && node --test \"dist/test/*.test.js\""
+  },
+  "dependencies": {
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "typescript": "^5.6.0"
+  }
+}
