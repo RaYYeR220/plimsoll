@@ -1,0 +1,45 @@
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-4);
+  align-items: center;
+}
+
+.figure {
+  aspect-ratio: 500 / 430;
+  max-height: 19rem;
+  justify-self: center;
+  width: 100%;
+}
+
+.side {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.source {
+  margin: 0;
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--rule);
+  font-size: var(--t-small);
+  color: var(--text-3);
+}
+
+/* Narrow: the figures come first. A room with no numbers under it is the thing
+   the phone layout kept doing wrong. */
+@media (max-width: 899px) {
+  .side {
+    order: 1;
+  }
+
+  .figure {
+    order: 2;
+    max-height: 11rem;
+  }
+}
+
+@media (min-width: 900px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  }
+}

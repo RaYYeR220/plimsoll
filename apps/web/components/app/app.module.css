@@ -1,0 +1,504 @@
+/* ── The app shell ─────────────────────────────────────────────────────── */
+.shell {
+  min-height: 100svh;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  background: var(--ground);
+}
+
+.rail {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding: var(--s-3) var(--gutter);
+  background: var(--ground);
+  border-bottom: 1px solid var(--rule);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.6em;
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 700;
+  font-size: 1.375rem;
+  line-height: 1;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.brand span {
+  font-family: var(--font-data), ui-monospace, monospace;
+  font-weight: 400;
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.nav a {
+  --c: 6px;
+  padding: 0.45em 0.9em;
+  font-size: var(--t-data);
+  font-family: var(--font-data), ui-monospace, monospace;
+  color: var(--text-2);
+  text-decoration: none;
+  clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
+}
+
+.nav a:hover {
+  background: color-mix(in oklab, var(--ground) 88%, var(--lamp));
+  color: var(--text);
+}
+
+.nav a[aria-current='page'] {
+  background: var(--lamp);
+  color: var(--ground);
+}
+
+/* the band: what is true of the whole app right now, in one row */
+.band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4em var(--s-4);
+  padding: 0.45em var(--gutter);
+  border-bottom: 1px solid var(--rule);
+  background: color-mix(in oklab, var(--ground) 94%, var(--lamp));
+}
+
+.bandFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2em var(--s-4);
+  font-family: var(--font-data), ui-monospace, monospace;
+  font-size: 0.75rem;
+  color: var(--text-2);
+}
+
+.bandFacts span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.6em;
+}
+
+.bandFacts small {
+  font-size: 0.85em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.bandFacts a {
+  color: var(--text);
+}
+
+.demo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3em;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-family: var(--font-data), ui-monospace, monospace;
+  font-size: 0.75rem;
+}
+
+.demo legend {
+  float: left;
+  padding: 0 0.75em 0 0;
+  color: var(--text-3);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.85em;
+}
+
+.demo label {
+  --c: 5px;
+  padding: 0.35em 0.7em;
+  color: var(--text-2);
+  cursor: pointer;
+  clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
+  border: 1px solid var(--rule);
+}
+
+.demo label:hover {
+  color: var(--text);
+}
+
+.demo label[data-selected='true'] {
+  background: var(--lamp);
+  border-color: var(--lamp);
+  color: var(--ground);
+}
+
+.demo label:has(input:focus-visible) {
+  outline: 2px solid var(--text);
+  outline-offset: 3px;
+}
+
+.demo input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.demoNote {
+  flex: 1 1 22ch;
+  margin: 0;
+  padding-left: var(--s-3);
+  font-family: var(--font-text), system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--text-3);
+}
+
+.main {
+  padding: var(--s-4) var(--gutter) var(--s-7);
+}
+
+/* ── Page furniture ─────────────────────────────────────────────────────── */
+.pageHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-3) var(--s-5);
+  margin-bottom: var(--s-4);
+}
+
+.pageHead h1 {
+  font-size: clamp(1.625rem, 1.1rem + 1.3vw, 2.25rem);
+}
+
+.lede {
+  max-width: 58ch;
+  margin-top: var(--s-1);
+  font-size: var(--t-small);
+  color: var(--text-2);
+}
+
+/* ── Panels ─────────────────────────────────────────────────────────────── */
+.panel {
+  --c: 14px;
+  position: relative;
+  padding: var(--s-4);
+  background: color-mix(in oklab, var(--ground) 93%, var(--lamp));
+  clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
+}
+
+.panel h2,
+.panel h3 {
+  font-size: 1.0625rem;
+  margin-bottom: var(--s-2);
+}
+
+.panelNote {
+  margin-top: var(--s-2);
+  font-size: var(--t-small);
+  color: var(--text-3);
+}
+
+/* The lamp each family is lit by lives in globals.css, beside the landing's:
+   they are token declarations, and a CSS module may not carry a bare attribute
+   selector. ── The room ─────────────────────────────────────────────────── */
+.room {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.room path {
+  vector-effect: non-scaling-stroke;
+}
+
+.roomFloor {
+  fill: none;
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+.face-top {
+  fill: var(--face-lit);
+  stroke: var(--arris);
+  stroke-opacity: 0.5;
+  stroke-width: 0.6;
+}
+
+.face-part {
+  fill: var(--face-half);
+  stroke: var(--arris);
+  stroke-opacity: 0.5;
+  stroke-width: 0.6;
+}
+
+.face-half {
+  fill: var(--face-half);
+  stroke: var(--ground);
+  stroke-width: 0.7;
+}
+
+.face-cut {
+  fill: var(--face-cut);
+  stroke: var(--ground);
+  stroke-width: 0.7;
+}
+
+.face-dark {
+  fill: var(--face-dark);
+  stroke: var(--ground);
+  stroke-width: 0.7;
+}
+
+/* a position too small to fill a plate: a hairline, never nothing */
+.roomTrace {
+  fill: var(--lamp);
+  stroke: var(--lamp);
+  stroke-width: 1;
+}
+
+.roomVoid path {
+  stroke: var(--lamp);
+  stroke-width: 1.1;
+}
+
+.roomFog path {
+  fill: color-mix(in oklab, var(--murk) 14%, transparent);
+  stroke: color-mix(in oklab, var(--murk) 50%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+}
+
+.roomPlane {
+  fill: var(--lamp);
+  fill-opacity: 0.1;
+  stroke: var(--lamp);
+  stroke-width: 1.4;
+}
+
+.roomHanger {
+  stroke: var(--lamp);
+  stroke-opacity: 0.45;
+  stroke-width: 1;
+}
+
+/* ── The readout ────────────────────────────────────────────────────────── */
+.readout {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.readoutWord {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 700;
+  font-size: clamp(1.75rem, 1.2rem + 1.2vw, 2.375rem);
+  line-height: 1;
+  color: var(--text);
+}
+
+.readout[data-size='card'] .readoutWord {
+  font-size: clamp(1.375rem, 1.1rem + 0.7vw, 1.75rem);
+}
+
+.readoutAmounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-5);
+  margin: 0;
+  font-family: var(--font-data), ui-monospace, monospace;
+  font-size: var(--t-data-lg);
+}
+
+.readoutAmounts dt {
+  font-size: 0.8em;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.readoutAmounts dd {
+  margin: 0.15em 0 0;
+  color: var(--text);
+}
+
+.readoutLine,
+.readoutDetail {
+  margin: 0;
+  font-size: var(--t-small);
+  color: var(--text-2);
+}
+
+.readoutState {
+  display: inline-block;
+  margin-right: 0.6em;
+  padding: 0.15em 0.6em;
+  background: var(--lamp);
+  color: var(--ground);
+  font-family: var(--font-data), ui-monospace, monospace;
+  font-size: 0.85em;
+}
+
+.readoutState[data-family='covered'] {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--rule);
+}
+
+.readoutCode {
+  margin: 0;
+  font-family: var(--font-data), ui-monospace, monospace;
+  font-size: var(--t-data);
+  color: var(--text-2);
+}
+
+/* ── Dense rows ─────────────────────────────────────────────────────────── */
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-data), ui-monospace, monospace;
+  font-size: var(--t-data);
+}
+
+.rows li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.3em var(--s-3);
+  padding-block: 0.5em;
+  border-bottom: 1px solid var(--rule);
+}
+
+.rows li:last-child {
+  border-bottom: 0;
+}
+
+/* The row parts are named in the markup rather than imported, so they stay global —
+   scoped under the hashed .rows, which is what keeps them from leaking. */
+.rows :global(.k) {
+  color: var(--text-2);
+}
+
+.rows :global(.v) {
+  color: var(--text);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.rows :global(.sub) {
+  grid-column: 1 / -1;
+  color: var(--text-3);
+  font-size: 0.92em;
+}
+
+.rows a {
+  color: var(--text);
+}
+
+/* ── The waterfall: one bar per vault, stacked from zero ─────────────────── */
+.legs {
+  display: grid;
+  gap: var(--s-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.leg {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.2em var(--s-3);
+  font-family: var(--font-data), ui-monospace, monospace;
+  font-size: var(--t-data);
+}
+
+.legName {
+  color: var(--text);
+}
+
+.legName small {
+  display: block;
+  color: var(--text-3);
+}
+
+.legAmount {
+  text-align: right;
+  color: var(--text);
+}
+
+.legBar {
+  grid-column: 1 / -1;
+  height: 6px;
+  background: color-mix(in oklab, var(--ground) 72%, var(--lamp));
+}
+
+.legBar i {
+  display: block;
+  height: 100%;
+  background: var(--face-lit);
+}
+
+/* On a phone the chrome is a strip, not a screen: the note's own figures have to
+   be in the first fold, so everything above them is cut to what it must say. */
+@media (max-width: 899px) {
+  .rail {
+    gap: var(--s-3);
+    padding: 0.45em var(--gutter);
+  }
+
+  .brand {
+    font-size: 1.125rem;
+  }
+
+  .brand span {
+    display: none;
+  }
+
+  .nav {
+    gap: 0.25em;
+  }
+
+  .nav a {
+    padding: 0.3em 0.6em;
+    font-size: 0.6875rem;
+  }
+
+  .band {
+    gap: 0.25em var(--s-3);
+    padding: 0.4em var(--gutter);
+  }
+
+  .bandFacts {
+    gap: 0.1em var(--s-3);
+    font-size: 0.6875rem;
+  }
+
+  .demo,
+  .demoNote {
+    font-size: 0.6875rem;
+  }
+
+  .demo label {
+    padding: 0.3em 0.55em;
+  }
+
+  .demoNote {
+    flex-basis: 100%;
+    padding-left: 0;
+  }
+
+  .readoutAmounts {
+    gap: var(--s-2) var(--s-4);
+  }
+}

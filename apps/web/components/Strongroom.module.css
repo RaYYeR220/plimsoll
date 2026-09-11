@@ -1,0 +1,96 @@
+.room {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  container-type: inline-size;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.drawing {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Hairlines stay hairlines at every size the room is drawn at. */
+.drawing path,
+.drawing rect {
+  vector-effect: non-scaling-stroke;
+}
+
+.floor {
+  pointer-events: none;
+}
+
+.grab {
+  cursor: ns-resize;
+}
+
+.room[data-adjustable='false'] .grab,
+.room[data-adjustable='false'] .gauge {
+  cursor: default;
+}
+
+.gauge {
+  position: absolute;
+  touch-action: none;
+  cursor: ns-resize;
+}
+
+.gauge:focus-visible {
+  outline: none;
+}
+
+.readout {
+  position: absolute;
+  display: grid;
+  gap: 0.35em;
+  max-width: 25%;
+  margin: 0;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.figure {
+  font-size: clamp(15px, 3.7cqi, 32px);
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.source {
+  font-size: clamp(11px, 1.55cqi, 13px);
+  line-height: 1.3;
+  color: var(--text-2);
+}
+
+.stamp {
+  position: absolute;
+  left: 0;
+  text-align: right;
+  pointer-events: none;
+}
+
+.word {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 700;
+  font-size: clamp(24px, 7cqi, 60px);
+  line-height: 0.92;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--alarm);
+}
+
+.reason {
+  display: inline-block;
+  margin-top: 0.7em;
+  padding: 0.4em 0.75em;
+  background: var(--alarm);
+  color: var(--ground);
+  font-size: clamp(11px, 1.6cqi, 13px);
+  line-height: 1.45;
+}

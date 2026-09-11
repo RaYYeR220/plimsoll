@@ -1,0 +1,154 @@
+.section {
+  padding-inline: var(--gutter);
+  padding-block: var(--s-8) 0;
+}
+
+.title {
+  max-width: 16ch;
+  margin-bottom: var(--s-5);
+  font-size: var(--t-h2);
+}
+
+.lead {
+  max-width: 60ch;
+  font-size: var(--t-lead);
+  line-height: 1.62;
+  color: var(--text-2);
+}
+
+.intro {
+  max-width: 60ch;
+  margin-block: var(--s-4);
+  color: var(--text-2);
+}
+
+/* ── The refusal ──────────────────────────────────────────────────────── */
+.entries {
+  display: grid;
+  gap: var(--s-7);
+  max-width: 40rem;
+}
+
+.entry h3 {
+  margin-bottom: var(--s-3);
+  font-size: var(--t-h3);
+}
+
+.entry > p {
+  color: var(--text-2);
+}
+
+.entry > p + p {
+  margin-top: var(--s-3);
+}
+
+/* A refusal is lit by the arc lamps: the only place below the fold they come on. */
+.record {
+  display: grid;
+  justify-items: start;
+  gap: var(--s-2);
+  margin-top: var(--s-4);
+  padding: var(--s-4);
+  color: var(--text);
+}
+
+.status {
+  font-size: var(--t-small);
+  letter-spacing: 0.02em;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.reason {
+  padding: 0.35em 0.7em;
+  background: var(--lamp);
+  color: var(--ground);
+  overflow-wrap: anywhere;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
+  margin-top: var(--s-2);
+  font-size: var(--t-small);
+}
+
+/* ── The register ─────────────────────────────────────────────────────── */
+.register {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--rule);
+}
+
+.item {
+  display: grid;
+  gap: 0.4em var(--s-5);
+  padding-block: var(--s-4);
+  border-bottom: 1px solid var(--rule);
+}
+
+.itemName {
+  font-size: 1.25rem;
+  line-height: 1.2;
+}
+
+.itemAbout {
+  max-width: 54ch;
+  color: var(--text-2);
+}
+
+.itemLink {
+  overflow-wrap: anywhere;
+}
+
+.itemLink span {
+  color: var(--text-2);
+}
+
+@media (min-width: 900px) {
+  .item {
+    grid-template-columns: 14rem minmax(0, 1fr) minmax(0, 21rem);
+    align-items: baseline;
+  }
+}
+
+/* ── Closing and footer ───────────────────────────────────────────────── */
+.closing {
+  padding-bottom: var(--s-8);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  margin-top: var(--s-5);
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-3) var(--s-6);
+  padding: var(--s-5) var(--gutter) var(--s-6);
+  border-top: 1px solid var(--rule);
+  font-size: var(--t-small);
+  color: var(--text-2);
+}
+
+.footMark {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: var(--text);
+}
+
+.footLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

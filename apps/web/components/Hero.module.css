@@ -1,0 +1,132 @@
+.hero {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+  min-height: 100svh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'head'
+    'claim'
+    'room'
+    'act';
+  align-content: start;
+  row-gap: var(--s-4);
+  padding-block: var(--s-4) var(--s-5);
+  padding-inline: var(--gutter);
+  background: var(--ground);
+  color: var(--text);
+}
+
+/* The lamp over the stack. It is whatever light the room is currently lit by. */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(
+    70% 38% at 50% 66%,
+    color-mix(in oklab, var(--lamp) 12%, transparent),
+    transparent 74%
+  );
+}
+
+.head {
+  grid-area: head;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-4);
+}
+
+.mark {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 700;
+  font-size: 1.625rem;
+  line-height: 1;
+}
+
+.source {
+  font-size: var(--t-small);
+  color: var(--text-2);
+}
+
+.claim {
+  grid-area: claim;
+  position: relative;
+  z-index: 1;
+  max-width: 34rem;
+}
+
+.claim h1 {
+  font-size: var(--t-h1);
+  letter-spacing: -0.005em;
+}
+
+.deck {
+  margin-top: var(--s-4);
+  max-width: 42ch;
+  font-size: var(--t-lead);
+  line-height: 1.58;
+  color: var(--text-2);
+}
+
+.room {
+  grid-area: room;
+  width: 100%;
+}
+
+.act {
+  grid-area: act;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--s-3);
+}
+
+.hint {
+  max-width: 40ch;
+  font-size: var(--t-small);
+  color: var(--text-2);
+}
+
+@media (min-width: 900px) {
+  .hero {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr);
+    grid-template-rows: auto 1fr auto;
+    grid-template-areas:
+      'head head'
+      'claim room'
+      'act room';
+    align-content: stretch;
+    column-gap: var(--s-6);
+    row-gap: var(--s-5);
+  }
+
+  .hero::before {
+    background: radial-gradient(
+      44% 46% at 66% 44%,
+      color-mix(in oklab, var(--lamp) 12%, transparent),
+      transparent 72%
+    );
+  }
+
+  .claim {
+    align-self: center;
+  }
+
+  .room {
+    align-self: center;
+    justify-self: center;
+    width: min(100%, calc(100svh - 12rem));
+  }
+
+  .act {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--s-4);
+  }
+}

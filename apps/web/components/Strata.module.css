@@ -1,0 +1,270 @@
+.strata {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'heading'
+    'figure'
+    'chapters';
+  padding-inline: var(--gutter);
+  padding-block: var(--s-8) var(--s-6);
+  overflow-x: clip;
+}
+
+.heading {
+  grid-area: heading;
+  margin-bottom: var(--s-4);
+  font-size: var(--t-h2);
+}
+
+/* On a phone the drawing rides at the top of the screen while the text passes under it. */
+.figure {
+  --fig-h: 44svh;
+  grid-area: figure;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: var(--fig-h);
+  display: grid;
+  place-items: center;
+  margin-inline: calc(var(--gutter) * -1);
+  padding-inline: var(--gutter);
+  background: linear-gradient(var(--ground) 88%, transparent);
+}
+
+.canvas {
+  position: relative;
+  width: min(100%, calc(var(--fig-h) * 980 / 830));
+  aspect-ratio: 980 / 830;
+  container-type: inline-size;
+}
+
+.drawing {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.drawing path {
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+
+.label {
+  position: absolute;
+  transform: translateY(-50%);
+  font-size: clamp(11px, 1.8cqi, 15px);
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--text-2);
+}
+
+.label[data-align='end'] {
+  transform: translate(-100%, -50%);
+}
+
+.label[data-stage='active'] {
+  color: var(--text);
+}
+
+.chapters {
+  grid-area: chapters;
+}
+
+.chapter {
+  min-height: 76svh;
+  max-width: var(--measure);
+  padding-top: var(--s-5);
+}
+
+.chapter h3 {
+  margin-bottom: var(--s-3);
+  font-size: var(--t-h3);
+  color: var(--text-3);
+}
+
+.chapter[data-active='true'] h3 {
+  color: var(--text);
+}
+
+.chapter p {
+  color: var(--text-2);
+}
+
+.chapter p + p {
+  margin-top: var(--s-3);
+}
+
+.aside {
+  font-size: var(--t-small);
+}
+
+@media (min-width: 900px) {
+  .strata {
+    grid-template-columns: minmax(0, 31rem) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      'heading figure'
+      'chapters figure';
+    column-gap: var(--s-6);
+  }
+
+  .figure {
+    --fig-h: 84svh;
+    top: 8svh;
+    align-self: start;
+    margin: 0;
+    padding: 0;
+    background: none;
+  }
+
+  .chapter {
+    min-height: 86svh;
+  }
+}
+
+/* ── The drawing's materials ──────────────────────────────────────────── */
+
+/* The architecture is never lit: it is the room, not one of its parts. */
+.arch {
+  --a-floor: color-mix(in oklab, var(--face-dark) 62%, var(--ground));
+  --a-half: color-mix(in oklab, var(--face-dark) 72%, var(--ground));
+  --a-dark: color-mix(in oklab, var(--face-dark) 46%, var(--ground));
+}
+
+.arch path {
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+.a-floor {
+  fill: var(--a-floor);
+}
+
+.a-half,
+.a-cut {
+  fill: var(--a-half);
+}
+
+.a-dark {
+  fill: var(--a-dark);
+}
+
+.a-section {
+  fill: url(#strata-cut);
+}
+
+/* A part is hidden (construction lines only) until its chapter is reached,
+   lit while it is being read, and at rest once the reader has moved on. */
+.part {
+  --p-top: var(--face-cut);
+  --p-half: var(--face-dark);
+  --p-cut: color-mix(in oklab, var(--face-dark) 70%, var(--ground));
+  --p-dark: color-mix(in oklab, var(--face-dark) 45%, var(--ground));
+  --p-edge: var(--rule);
+  --p-mark: var(--text-3);
+}
+
+.part[data-stage='active'] {
+  --p-top: var(--face-lit);
+  --p-half: var(--face-half);
+  --p-cut: var(--face-cut);
+  --p-dark: var(--face-dark);
+  --p-edge: var(--arris);
+  --p-mark: var(--text);
+}
+
+.part[data-stage='hidden'] {
+  --p-top: none;
+  --p-half: none;
+  --p-cut: none;
+  --p-dark: none;
+  --p-edge: var(--rule);
+  --p-mark: var(--rule);
+}
+
+.p-top {
+  fill: var(--p-top);
+  stroke: var(--p-edge);
+  stroke-width: 0.75;
+}
+
+.p-half {
+  fill: var(--p-half);
+  stroke: var(--ground);
+  stroke-width: 0.75;
+}
+
+.p-cut {
+  fill: var(--p-cut);
+  stroke: var(--ground);
+  stroke-width: 0.75;
+}
+
+.p-dark {
+  fill: var(--p-dark);
+  stroke: var(--ground);
+  stroke-width: 0.75;
+}
+
+.rule {
+  fill: none;
+  stroke: var(--p-mark);
+  stroke-width: 1;
+  stroke-opacity: 0.7;
+}
+
+.mark {
+  fill: none;
+  stroke: var(--p-mark);
+  stroke-width: 1.5;
+}
+
+.plane {
+  fill: color-mix(in oklab, var(--lamp) 10%, transparent);
+  stroke: var(--p-mark);
+  stroke-width: 1.25;
+  stroke-dasharray: 8 5;
+}
+
+.hanger {
+  stroke: var(--p-mark);
+  stroke-width: 1;
+  stroke-opacity: 0.6;
+}
+
+.frame {
+  fill: var(--p-cut);
+  stroke: var(--p-edge);
+}
+
+.door {
+  fill: var(--p-dark);
+  stroke: var(--p-edge);
+}
+
+.lock,
+.bolt {
+  fill: var(--p-top);
+  stroke: var(--p-edge);
+}
+
+.keyhole {
+  stroke: var(--ground);
+  stroke-width: 2;
+}
+
+.rod {
+  fill: none;
+  stroke: var(--p-mark);
+  stroke-width: 2;
+}
+
+.leader {
+  fill: none;
+  stroke: var(--p-mark);
+  stroke-width: 1;
+  stroke-opacity: 0.6;
+}

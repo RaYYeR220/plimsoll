@@ -1,0 +1,18 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: var(--s-4);
+  margin-top: var(--s-4);
+  align-items: start;
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+/* the leg whose amount is whatever is left: drawn as a range, never as a number */
+.rest {
+  display: block;
+  height: 100%;
+  border: 1px dashed color-mix(in oklab, var(--ground) 40%, var(--lamp));
+}

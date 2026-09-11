@@ -1,0 +1,328 @@
+/* ── Colour ──────────────────────────────────────────────────────────────
+   Three authored values. Every face, edge, rule and text tone is mixed from
+   them, so changing the lamp re-lights everything under it at once. */
+:root {
+  --ground: #12100b; /* warm black: the strongroom */
+  --ink: #c9a84c;    /* brass: the tungsten the room is lit by */
+  --alarm: #eaf4ff;  /* arc white: only where something has been refused */
+  /* The app's fourth value, and the landing uses none of it: a note whose backing
+     cannot be read is not short, and must not be lit as though it were. */
+  --murk: #7c9385;
+
+  --lamp: var(--ink);
+
+  /* How much ground goes into each tone under the current lamp. Contrast of
+     the text steps against the ground is noted beside them. */
+  --k-arris: 8%;
+  --k-text-2: 22%; /* 5.2 : 1 */
+  --k-lit: 22%;
+  --k-text-3: 34%; /* 3.9 : 1, large text and marks only */
+  --k-half: 52%;
+  --k-cut: 64%;
+  --k-dark: 80%;
+  --k-rule: 82%;
+
+  /* One unit, derived from the viewport; every space on the page is a multiple. */
+  --unit: clamp(9px, 1.05vw, 15px);
+  --gutter: calc(var(--unit) * 4);
+  --s-1: calc(var(--unit) * 0.25);
+  --s-2: calc(var(--unit) * 0.5);
+  --s-3: var(--unit);
+  --s-4: calc(var(--unit) * 1.5);
+  --s-5: calc(var(--unit) * 2.5);
+  --s-6: calc(var(--unit) * 4);
+  --s-7: calc(var(--unit) * 6.5);
+  --s-8: calc(var(--unit) * 10.5);
+
+  --chamfer: 10px;
+  --measure: 38rem;
+
+  /* Dense rows in the app: set in the data face, which is monospaced and holds at 13px. */
+  --t-data: 0.8125rem;
+  --t-data-lg: 0.9375rem;
+
+  --t-small: 0.875rem;
+  --t-body: clamp(1rem, 0.95rem + 0.22vw, 1.125rem);
+  --t-lead: clamp(1.0625rem, 0.98rem + 0.4vw, 1.3125rem);
+  --t-h3: clamp(1.375rem, 1.1rem + 0.9vw, 1.875rem);
+  --t-h2: clamp(2rem, 1.35rem + 2.6vw, 3.625rem);
+  --t-h1: clamp(2.25rem, 0.9rem + 3.9vw, 4.75rem);
+
+  color-scheme: dark;
+}
+
+@media (max-width: 899px) {
+  :root {
+    --unit: clamp(10px, 3.4vw, 14px);
+    --gutter: max(16px, calc(var(--unit) * 1.5));
+  }
+}
+
+/* Derived tones are declared on every element that can change the lamp. A
+   custom property is resolved where it is declared, so a lamp change on a
+   child that did not re-derive them would inherit tones mixed under brass. */
+:root,
+[data-lamp],
+[data-family] {
+  --arris: color-mix(in oklab, var(--ground) var(--k-arris), var(--lamp));
+  --face-lit: color-mix(in oklab, var(--ground) var(--k-lit), var(--lamp));
+  --face-half: color-mix(in oklab, var(--ground) var(--k-half), var(--lamp));
+  --face-cut: color-mix(in oklab, var(--ground) var(--k-cut), var(--lamp));
+  --face-dark: color-mix(in oklab, var(--ground) var(--k-dark), var(--lamp));
+  --rule: color-mix(in oklab, var(--ground) var(--k-rule), var(--lamp));
+  --text: var(--lamp);
+  --text-2: color-mix(in oklab, var(--ground) var(--k-text-2), var(--lamp));
+  --text-3: color-mix(in oklab, var(--ground) var(--k-text-3), var(--lamp));
+}
+
+/* The arc lamps. Arc white is far brighter than brass, so every tone takes
+   more ground to land at the same place. No transition: the tungsten stops. */
+[data-lamp='arc'] {
+  --lamp: var(--alarm);
+  --k-arris: 20%;
+  --k-text-2: 40%; /* 5.8 : 1 */
+  --k-lit: 40%;
+  --k-text-3: 52%; /* 4.0 : 1 */
+  --k-half: 66%;
+  --k-cut: 74%;
+  --k-dark: 87%;
+  --k-rule: 88%;
+}
+
+/* Which lamp a note is under. Set on the element that shows one note's state, so a
+   market full of notes can hold several states at once without any of them leaking. */
+[data-family='covered'] {
+  --lamp: var(--ink);
+}
+
+[data-family='asset'] {
+  --lamp: var(--alarm);
+  --k-arris: 20%;
+  --k-text-2: 40%;
+  --k-lit: 40%;
+  --k-text-3: 52%;
+  --k-half: 66%;
+  --k-cut: 74%;
+  --k-dark: 87%;
+  --k-rule: 88%;
+}
+
+[data-family='evidence'] {
+  --lamp: var(--murk);
+  --k-arris: 16%;
+  --k-text-2: 34%;
+  --k-lit: 36%;
+  --k-text-3: 48%;
+  --k-half: 62%;
+  --k-cut: 72%;
+  --k-dark: 86%;
+  --k-rule: 86%;
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--ground);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--text);
+  font-family: var(--font-text), system-ui, sans-serif;
+  font-size: var(--t-body);
+  line-height: 1.6;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 700;
+  line-height: 1.04;
+  text-wrap: balance;
+}
+
+p {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.24em;
+}
+
+a:hover {
+  text-decoration-thickness: 2px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 4px;
+}
+
+::selection {
+  background: var(--lamp);
+  color: var(--ground);
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── The plate: a control cut with 45° chamfers, never a radius ─────────── */
+.plate-button {
+  --c: var(--chamfer);
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3rem;
+  padding: 0 1.75rem;
+  border: 0;
+  background: none;
+  color: var(--ground);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  flex: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.plate-button::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--lamp);
+  clip-path: polygon(
+    var(--c) 0,
+    100% 0,
+    100% calc(100% - var(--c)),
+    calc(100% - var(--c)) 100%,
+    0 100%,
+    0 var(--c)
+  );
+}
+
+.plate-button:hover::before {
+  background: var(--arris);
+}
+
+.plate-button:focus-visible {
+  outline: none;
+}
+
+.plate-button--quiet {
+  color: var(--text);
+}
+
+.plate-button--quiet:hover::before {
+  background: var(--text);
+}
+
+.plate-outline {
+  position: relative;
+  isolation: isolate;
+}
+
+.plate-outline::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--lamp);
+  pointer-events: none;
+}
+
+.plate-button:focus-visible::after,
+[data-focus-ring]:focus-visible::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  background: var(--text);
+  pointer-events: none;
+}
+
+/* One ring shape for every chamfered outline: the outer chamfer, then the
+   same shape inset by the ring's thickness, filled even-odd. */
+.plate-button--quiet::before,
+.plate-outline::before,
+.plate-button:focus-visible::after,
+[data-focus-ring]:focus-visible::after {
+  clip-path: polygon(
+    evenodd,
+    var(--rc) 0,
+    100% 0,
+    100% calc(100% - var(--rc)),
+    calc(100% - var(--rc)) 100%,
+    0 100%,
+    0 var(--rc),
+    var(--rc) 0,
+    calc(var(--rc) + var(--rt) * 0.414) var(--rt),
+    calc(100% - var(--rt)) var(--rt),
+    calc(100% - var(--rt)) calc(100% - var(--rc) - var(--rt) * 0.414),
+    calc(100% - var(--rc) - var(--rt) * 0.414) calc(100% - var(--rt)),
+    var(--rt) calc(100% - var(--rt)),
+    var(--rt) calc(var(--rc) + var(--rt) * 0.414),
+    calc(var(--rc) + var(--rt) * 0.414) var(--rt)
+  );
+}
+
+.plate-button--quiet::before {
+  --rc: var(--c);
+  --rt: 1.5px;
+}
+
+.plate-outline::before {
+  --rc: 14px;
+  --rt: 1px;
+}
+
+.plate-button:focus-visible::after,
+[data-focus-ring]:focus-visible::after {
+  --rc: calc(var(--chamfer) + 3px);
+  --rt: 2px;
+}
+
+/* ── Not found ────────────────────────────────────────────────────────── */
+.lost {
+  min-height: 100svh;
+  display: grid;
+  align-content: center;
+  gap: var(--s-4);
+  padding-inline: var(--gutter);
+}
+
+.lost h1 {
+  max-width: 16ch;
+  font-size: var(--t-h2);
+}
