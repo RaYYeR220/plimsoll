@@ -1,0 +1,27 @@
+[package]
+name = "plimsoll_erc4626"
+version = "0.2.0"
+edition = "2021"
+license = "MIT"
+description = "Derived ERC-4626 vault layer on top of Pinax's erc4626 extractor"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+substreams = "0.7"
+substreams-ethereum = "0.11"
+prost = "0.13"
+prost-types = "0.13"
+hex = "0.4"
+num-bigint = "0.4"
+num-traits = "0.2"
+
+[profile.release]
+lto = true
+opt-level = "s"
+strip = "debuginfo"
+
+# Standalone crate: keeps cargo from walking up into the monorepo root.
+[workspace]

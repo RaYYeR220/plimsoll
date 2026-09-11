@@ -1,0 +1,127 @@
+syntax = "proto3";
+
+// Messari Yield Aggregator schema v1.3.1 (schema-yield.graphql in
+// messari/subgraphs), carried as protobuf so a standalone Substreams sink can
+// write it. Field names are the GraphQL names in snake_case.
+//
+// Scalar mapping: ID / String / BigInt -> string (BigInt as base-10 wei),
+// BigDecimal -> string, Int -> int32. GraphQL enum fields hold the enum
+// literal ("MAINNET", "YIELD", "DEPOSIT_FEE") as a string so a sink can write
+// it verbatim. References hold the referenced entity's id. Nullable GraphQL
+// fields are proto3 `optional`. @derivedFrom fields are omitted, since they
+// are reverse lookups rather than stored data.
+//
+// Only the entities this package can populate from Deposit/Withdraw flows
+// are included. Snapshots, Account/ActiveAccount and RewardToken are left to
+// the serving layer.
+package messari.yield_aggregator.v1;
+
+message Token {
+  string id = 1;
+  string name = 2;
+  string symbol = 3;
+  int32 decimals = 4;
+  optional string last_price_usd = 5;
+  optional string last_price_block_number = 6;
+}
+
+message VaultFee {
+  // "{feeType}-{vault}"
+  string id = 1;
+  // Percentage, e.g. "0.1" means 0.1%.
+  optional string fee_percentage = 2;
+  string fee_type = 3;
+}
+
+message YieldAggregator {
+  string id = 1;
+  string name = 2;
+  string slug = 3;
+  string schema_version = 4;
+  string subgraph_version = 5;
+  string methodology_version = 6;
+  string network = 7;
+  string type = 8;
+  string total_value_locked_usd = 9;
+  optional string protocol_controlled_value_usd = 10;
+  string cumulative_supply_side_revenue_usd = 11;
+  string cumulative_protocol_side_revenue_usd = 12;
+  string cumulative_total_revenue_usd = 13;
+  int32 cumulative_unique_users = 14;
+  int32 total_pool_count = 15;
+}
+
+message Vault {
+  string id = 1;
+  string protocol = 2;
+  optional string name = 3;
+  optional string symbol = 4;
+  string input_token = 5;
+  optional string output_token = 6;
+  repeated string reward_tokens = 7;
+  string deposit_limit = 8;
+  repeated string fees = 9;
+  string created_timestamp = 10;
+  string created_block_number = 11;
+  string total_value_locked_usd = 12;
+  string cumulative_supply_side_revenue_usd = 13;
+  string cumulative_protocol_side_revenue_usd = 14;
+  string cumulative_total_revenue_usd = 15;
+  string input_token_balance = 16;
+  optional string output_token_supply = 17;
+  optional string output_token_price_usd = 18;
+  optional string price_per_share = 19;
+  optional string staked_output_token_amount = 20;
+  repeated string reward_token_emissions_amount = 21;
+  repeated string reward_token_emissions_usd = 22;
+}
+
+message Deposit {
+  // "{hash}-{logIndex}"
+  string id = 1;
+  string hash = 2;
+  int32 log_index = 3;
+  string protocol = 4;
+  // The vault.
+  string to = 5;
+  // The address that supplied the assets.
+  string from = 6;
+  string block_number = 7;
+  string timestamp = 8;
+  string asset = 9;
+  string amount = 10;
+  string amount_usd = 11;
+  string vault = 12;
+}
+
+message Withdraw {
+  // "{hash}-{logIndex}"
+  string id = 1;
+  string hash = 2;
+  int32 log_index = 3;
+  string protocol = 4;
+  // The address that received the assets.
+  string to = 5;
+  // The vault.
+  string from = 6;
+  string block_number = 7;
+  string timestamp = 8;
+  string asset = 9;
+  string amount = 10;
+  string amount_usd = 11;
+  string vault = 12;
+}
+
+// Everything that changed in one block. Entities are full upserts: a sink
+// writes each one over the previous row with the same id.
+message Entities {
+  uint64 block_number = 1;
+  string block_hash = 2;
+  int64 timestamp = 3;
+  YieldAggregator protocol = 4;
+  repeated Token tokens = 5;
+  repeated VaultFee vault_fees = 6;
+  repeated Vault vaults = 7;
+  repeated Deposit deposits = 8;
+  repeated Withdraw withdraws = 9;
+}

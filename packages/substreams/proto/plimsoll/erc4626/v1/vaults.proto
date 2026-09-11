@@ -1,0 +1,205 @@
+syntax = "proto3";
+
+package plimsoll.erc4626.v1;
+
+// Addresses are lowercase 0x-hex strings and token amounts are base-10
+// strings of the raw uint256 (wei). Fields ending in `_norm` are divided by
+// the relevant token's decimals and rendered as decimal strings, so a
+// consumer never has to know which of the two tokens a number is in.
+
+enum FlowKind {
+  FLOW_KIND_UNSPECIFIED = 0;
+  FLOW_KIND_DEPOSIT = 1;
+  FLOW_KIND_WITHDRAW = 2;
+}
+
+// One Deposit or Withdraw log, lifted out of Pinax's per-transaction shape
+// and stamped with block context, which the upstream output does not carry.
+message Flow {
+  FlowKind kind = 1;
+  string vault = 2;
+  string sender = 3;
+  string owner = 4;
+  // Withdraw only.
+  string receiver = 5;
+  string assets = 6;
+  string shares = 7;
+  string tx_hash = 8;
+  string tx_from = 9;
+  uint32 log_index = 10;
+  uint64 ordinal = 11;
+}
+
+message Flows {
+  uint64 block_number = 1;
+  string block_hash = 2;
+  int64 timestamp = 3;
+  repeated Flow flows = 4;
+}
+
+// How much we trust that an address is a real ERC-4626 vault. Pinax matches
+// on topic0 alone, so a non-4626 contract with a same-signature event passes
+// their filter.
+enum Verification {
+  VERIFICATION_UNSPECIFIED = 0;
+  // asset() reverted or returned something that is not an address with
+  // ERC-20 decimals. Excluded from every derived output.
+  VERIFICATION_REJECTED = 1;
+  // asset() resolved but only one of Deposit / Withdraw has been seen so far.
+  VERIFICATION_ASSET_PROBE = 2;
+  // asset() resolved and both event signatures have co-occurred on the address.
+  VERIFICATION_CONFIRMED = 3;
+}
+
+message Token {
+  string address = 1;
+  string name = 2;
+  string symbol = 3;
+  uint32 decimals = 4;
+  // False when decimals() reverted; decimals then defaults to 18.
+  bool decimals_ok = 5;
+}
+
+// Registry entry, resolved by eth_call exactly once per address.
+message VaultInfo {
+  string address = 1;
+  // Vault share token metadata.
+  Token share = 2;
+  // Underlying asset from asset().
+  Token asset = 3;
+  bool asset_probe_ok = 4;
+  uint64 first_seen_block = 5;
+  int64 first_seen_timestamp = 6;
+}
+
+message VaultInfos {
+  repeated VaultInfo vaults = 1;
+}
+
+// One vault's state at the end of one block in which it had flows. This is
+// the series the attestation service reads: everything needed to state
+// "vault X held Y of asset Z at block N / time T" in a single message.
+message VaultBlock {
+  string vault = 1;
+  string asset = 2;
+  string asset_symbol = 3;
+  string share_symbol = 4;
+  Verification verification = 5;
+  uint32 share_decimals = 6;
+  uint32 asset_decimals = 7;
+
+  uint64 block_number = 10;
+  string block_hash = 11;
+  int64 timestamp = 12;
+
+  // Raw sums over this block's flows.
+  string deposit_assets = 20;
+  string deposit_shares = 21;
+  string withdraw_assets = 22;
+  string withdraw_shares = 23;
+  uint32 deposit_count = 24;
+  uint32 withdraw_count = 25;
+
+  // Normalised sums and signed net flow (deposits minus withdrawals).
+  string deposit_assets_norm = 30;
+  string deposit_shares_norm = 31;
+  string withdraw_assets_norm = 32;
+  string withdraw_shares_norm = 33;
+  string net_assets_norm = 34;
+  string net_shares_norm = 35;
+
+  // Assets per share, normalised, volume-weighted over the block. Kept apart
+  // on purpose: Deposit.assets is gross of any entry fee and Withdraw.assets
+  // is net of any exit fee, so entry >= true price >= exit, and a blended
+  // number would hide the fee. Empty when the block had no flow of that kind.
+  string entry_rate = 40;
+  string exit_rate = 41;
+  // (entry - exit) / exit in basis points, only when both sides traded in
+  // the same block. Rounding makes this a few hundredths of a bp on fee-less
+  // vaults; anything larger is a fee.
+  string fee_spread_bps = 42;
+  // entry_rate and exit_rate measured against state_price, as percentages.
+  // Premium > 0 means depositors paid above the end-of-block price; discount
+  // > 0 means withdrawers received below it. Both are fee plus rounding plus
+  // any interest accrued later in the same block.
+  string entry_premium_pct = 43;
+  string exit_discount_pct = 44;
+  // False when either rate sits outside [-0.01%, +10%] of state_price. A
+  // conforming vault cannot mint shares below its own price, and no
+  // disclosed ERC-4626 fee is above 10%. Contracts that pass the asset()
+  // probe but emit Deposit/Withdraw with other semantics (queued exits,
+  // rebasing receipts, LP tokens) land here. They keep their TVL but get no
+  // fee revenue, and a consumer acting on the price should refuse.
+  bool rates_consistent = 45;
+
+  // End-of-block vault state from an eth_call pinned to this block's hash.
+  bool state_ok = 50;
+  string total_assets = 51;
+  string total_supply = 52;
+  string total_assets_norm = 53;
+  string total_supply_norm = 54;
+  // total_assets_norm / total_supply_norm. Differs from convertToAssets() by
+  // the virtual-share offset, which is negligible once a vault has any size.
+  string state_price = 55;
+  // maxDeposit(address(0)): the vault's deposit cap as seen by a fresh account.
+  string max_deposit = 56;
+
+  // USD price of one unit of the underlying, empty when the asset is not in
+  // the pricing table. See README for how it is sourced.
+  string asset_price_usd = 60;
+  string tvl_usd = 61;
+}
+
+message VaultBlocks {
+  uint64 block_number = 1;
+  string block_hash = 2;
+  int64 timestamp = 3;
+  repeated VaultBlock vaults = 4;
+}
+
+// One nominated position, read by eth_call at this block: what the holder
+// actually has in the vault, and what the vault itself says that is worth.
+// These are exactly the inputs a coverage attestation needs.
+message Position {
+  // Label from the module params, normally the note's on-chain id.
+  string note = 1;
+  string holder = 2;
+  string vault = 3;
+  string asset = 4;
+  uint32 asset_decimals = 5;
+  uint32 share_decimals = 6;
+  // balanceOf(holder) on the vault.
+  string shares = 7;
+  // convertToAssets(shares): the vault's own valuation, rounded down.
+  string assets = 8;
+  string assets_norm = 9;
+  // USD per unit of the asset and the position's USD value. Empty when the
+  // asset is unpriced. The block that price was last observed at is
+  // price_block.
+  string asset_price_usd = 10;
+  string value_usd = 11;
+  uint64 price_block = 12;
+  // False when balanceOf, asset(), decimals() or convertToAssets() reverted.
+  // The amounts are then empty, never zero: a zero would read as a finding.
+  bool ok = 13;
+  // Registry verdict on the vault. VERIFICATION_UNSPECIFIED means this stream
+  // has not seen a flow on it since its initial block.
+  Verification verification = 14;
+  // rates_consistent from the vault's last block with flows, and that block.
+  // last_flow_block is 0 when no flow has been seen.
+  bool rates_consistent = 15;
+  uint64 last_flow_block = 16;
+}
+
+message Positions {
+  uint64 block_number = 1;
+  string block_hash = 2;
+  int64 timestamp = 3;
+  // True when positions were read at this block, either on a cadence tick or
+  // because a nominated vault had flows.
+  bool positions_read = 4;
+  repeated Position positions = 5;
+  // map_vault_blocks for the same block, carried through so that a single
+  // stream can answer both vault and note questions.
+  repeated VaultBlock vaults = 6;
+}
