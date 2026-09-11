@@ -155,7 +155,7 @@ node, recomputes the coverage ratio with its own arithmetic, asks the ledger wha
 and prints a verdict.
 
 ```
-node dist/bin/verify-charge.js --hcs 0.0.10451091:7 --explain
+node dist/bin/verify-charge.js --hcs 0.0.10451091:12 --explain
 node dist/bin/verify-charge.js --request <requestId> --from https://<host> --explain
 ```
 
@@ -180,6 +180,43 @@ at that block, redoes the division, checks the mirror node, and confirms the bic
 
 A note with more legs than fit degrades to a digest-only record that says so
 (`full: 0`) rather than chunking into messages nobody will reassemble.
+
+### No figure where none was established
+
+Keys are omitted, never zeroed. An evidence refusal carries only who, what and
+why — `p v rid n d pol att sig chg fam rsn known` — and nothing numeric: no
+`bps`, `floor`, `blk`, `obs`, `val`, `obl`, `ud`, `out`, `par`, `ss`, `vsh`,
+`srch` or `pos`. A `"bps": 0` would read as zero percent coverage and be
+indistinguishable from a genuine `no_attributable_positions` finding; absence
+cannot be misread. An asset finding that declines to quote a ratio
+(`declared_exceeds_real`) keeps its readings, which are the finding, but omits
+`bps` and `floor`.
+
+The same holds in the signature. Refusals are two EIP-712 types: `AssetRefusal`,
+which signs `coverageKnown` and the ratio fields, and `EvidenceRefusal`, which
+signs only `noteId, reason, expiry, nonce`. The primary type is hashed into the
+digest, so an evidence refusal's signature re-presented as an asset refusal
+reporting zero coverage recovers to a different address.
+
+### Canonical records, and the ones before them
+
+The topic is immutable, so earlier records stay where they are. **Sequences 1–11
+use the first encoding**, in which evidence refusals carried zeroed numeric
+fields (seq 9, `source_unavailable`, has `"bps": 0`). That encoding was wrong
+for the reason above and was replaced; the current `verify-charge` flags such a
+record with `no coverage figure is published where none was established`.
+Checked from the record alone, as a stranger would, seq 9 is the only legacy
+record that fails; the legacy attestations and asset refusals still verify.
+MOCKS.md has the per-record results, including the one case where our own old
+receipts no longer match the corrected signature types.
+
+The canonical records, in the current encoding:
+
+| case | HCS seq | bytes | settlement |
+| --- | --- | --- | --- |
+| attested, NOTE-ALPHA, 13000 bps | 12 | 843 | `0.0.7162784@1789036743.662497323` |
+| asset refusal, NOTE-BRAVO, 8700 bps | 13 | 832 | none |
+| evidence refusal, NOTE-INDIA, `source_unavailable` | 14 | 365 | none |
 
 ## Honest limits
 

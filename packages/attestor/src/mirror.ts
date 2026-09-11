@@ -58,6 +58,18 @@ export interface MirrorClientOptions {
   fetchImpl?: typeof globalThis.fetch;
 }
 
+/**
+ * Node's global fetch pool holds sockets open for several seconds after the
+ * last request. A long-running server wants that; a CLI that has finished
+ * reading and wants to exit with a specific code does not.
+ */
+export async function releaseHttpPool(): Promise<void> {
+  const dispatcher = (globalThis as Record<symbol, unknown>)[
+    Symbol.for("undici.globalDispatcher.1")
+  ] as { close?: () => Promise<void> } | undefined;
+  await dispatcher?.close?.().catch(() => {});
+}
+
 export class MirrorClient {
   private readonly baseUrl: string;
   private readonly attempts: number;

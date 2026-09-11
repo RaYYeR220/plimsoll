@@ -70,12 +70,43 @@ describe("HCS anchoring stays inside one consensus message", () => {
     assert.equal(record.tx, undefined, "no charge means no transaction id in the record");
   });
 
-  it("marks an evidence refusal as carrying no ratio", async () => {
+  it("omits every ratio-bearing key from an evidence refusal rather than zeroing it", async () => {
     const verdict = await attest("NOTE-INDIA", { source, signer });
     const record = buildAnchorRecord({ requestId: "0123456789abcdef", verdict, charge: null });
     assert.equal(record.fam, "evidence");
     assert.equal(record.known, false);
-    assert.equal(record.bps, 0);
+
+    // The regression this guards: the first encoding always emitted these keys,
+    // zeroing what it did not know, so an evidence refusal went on chain as
+    // `"bps": 0` — a claim of zero percent coverage, byte-identical in that
+    // field to a real no_attributable_positions finding.
+    const raw = JSON.parse(JSON.stringify(record)) as Record<string, unknown>;
+    for (const key of ["bps", "floor", "blk", "obs", "ud", "out", "par", "obl", "val", "ss", "vsh", "srch", "pos"]) {
+      assert.equal(key in raw, false, `an evidence refusal must not contain "${key}" at all`);
+    }
+    assert.equal(JSON.stringify(record).includes('"bps"'), false);
+  });
+
+  it("omits the ratio from an asset finding that declines to quote one", async () => {
+    // declared_exceeds_real is an asset finding with no ratio. It keeps the
+    // evidence, which is the finding, but must not publish a coverage figure.
+    const verdict = await attest("NOTE-CHARLIE", { source, signer });
+    const record = buildAnchorRecord({ requestId: "0123456789abcdef", verdict, charge: null });
+    assert.equal(record.fam, "asset");
+    assert.equal(record.known, false);
+    assert.equal("bps" in record, false, "no ratio was established, so none is published");
+    assert.equal("floor" in record, false, "a floor with no ratio invites the reader to supply one");
+    assert.ok(record.srch, "the evidence behind the finding is still committed to");
+    assert.ok(record.pos && record.pos.length > 0);
+  });
+
+  it("still publishes the ratio when one was actually established", async () => {
+    for (const noteId of ["NOTE-ALPHA", "NOTE-BRAVO", "NOTE-HOTEL"]) {
+      const verdict = await attest(noteId, { source, signer });
+      const record = buildAnchorRecord({ requestId: "0123456789abcdef", verdict, charge: null });
+      assert.equal(typeof record.bps, "number", `${noteId} established a ratio and must publish it`);
+      assert.equal(record.floor, DEFAULT_POLICY.floorBps);
+    }
   });
 
   it("degrades to a digest rather than chunking when a note has too many legs", async () => {

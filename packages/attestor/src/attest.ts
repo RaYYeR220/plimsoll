@@ -94,13 +94,14 @@ export interface RefusedVerdict {
   description: string;
   /** Only ever true for the asset family. */
   coverageKnown: boolean;
-  coverageBps: number;
+  /** Null whenever no ratio was established. Never zero: zero is a claim. */
+  coverageBps: number | null;
   message: RefusalMessage;
   signature: Hex;
-  attestor: string;
-  /** Absent when the failure happened before any snapshot existed. */
+  /** Always null for the evidence family, which asserts it has none. */
   evidence: Evidence | null;
-  sourceHash: Hex;
+  attestor: string;
+  sourceHash: Hex | null;
   detail: Record<string, unknown>;
   chargeable: false;
 }
@@ -361,19 +362,33 @@ async function refuse(args: RefuseArgs): Promise<RefusedVerdict> {
   }
 
   const sourceHash = args.evidence ? canonicalHash(args.evidence) : ZERO_HASH;
-  const message: RefusalMessage = {
-    noteId: args.noteId,
-    family: familyCode(family),
-    reason: args.reason,
-    coverageKnown: args.coverage !== null,
-    coverageBps: args.coverage ?? 0,
-    asOfBlock: args.evidence ? BigInt(args.evidence.asOfBlock) : 0n,
-    vaultSetHash: args.evidence ? args.evidence.vaultSetHash : ZERO_HASH,
-    sourceHash,
-    expiry: BigInt(args.now + args.policy.attestationTtlSeconds),
-    nonce: args.nonce,
-  };
+  const expiry = BigInt(args.now + args.policy.attestationTtlSeconds);
+
+  // An evidence refusal is signed as a type that has no room for a ratio, a
+  // block or a hash. Previously these were zeroed into a shared struct, which
+  // meant "we could not tell" went out as the number 0 and read as zero percent
+  // coverage. Absence is unambiguous where a zero is not.
+  const message: RefusalMessage =
+    family === "evidence"
+      ? { noteId: args.noteId, reason: args.reason, expiry, nonce: args.nonce }
+      : {
+          noteId: args.noteId,
+          reason: args.reason,
+          coverageKnown: args.coverage !== null,
+          coverageBps: args.coverage ?? 0,
+          asOfBlock: args.evidence ? BigInt(args.evidence.asOfBlock) : 0n,
+          vaultSetHash: args.evidence ? args.evidence.vaultSetHash : ZERO_HASH,
+          sourceHash,
+          expiry,
+          nonce: args.nonce,
+        };
   const signature = await args.signer.signRefusal(message);
+
+  // An evidence refusal publishes nothing it declined to trust. Keeping the
+  // snapshot around under the name "evidence" would reintroduce, one layer down,
+  // exactly the conflation the split type exists to prevent. The diagnostic that
+  // explains the refusal lives in `detail`, which is not a coverage claim.
+  const publishedEvidence = family === "evidence" ? null : args.evidence;
 
   return {
     decision: "refused",
@@ -383,12 +398,12 @@ async function refuse(args: RefuseArgs): Promise<RefusedVerdict> {
     reason: args.reason,
     description: REFUSAL_DESCRIPTIONS[args.reason],
     coverageKnown: args.coverage !== null,
-    coverageBps: args.coverage ?? 0,
+    coverageBps: args.coverage,
     message,
     signature,
     attestor: args.signer.address,
-    evidence: args.evidence,
-    sourceHash,
+    evidence: publishedEvidence,
+    sourceHash: publishedEvidence ? sourceHash : null,
     detail: args.detail,
     chargeable: false,
   };

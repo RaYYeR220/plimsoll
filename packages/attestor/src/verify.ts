@@ -127,20 +127,26 @@ async function checkSignature(receipt: StoredReceipt): Promise<Check> {
  */
 export function checkFamilyInvariant(receipt: StoredReceipt): Check {
   if (receipt.decision === "attested") {
-    return check("family", "attestation carries a ratio", receipt.coverageBps >= 0, `${receipt.coverageBps} bps`);
+    return check(
+      "family",
+      "attestation carries a ratio",
+      receipt.coverageBps !== null && receipt.coverageBps >= 0,
+      `${receipt.coverageBps} bps`,
+    );
   }
   const reason = receipt.reason as RefusalReason;
   const family = familyOf(reason);
 
   if (family === "evidence") {
-    const ok = receipt.coverageKnown === false && receipt.coverageBps === 0;
+    // null, not zero: an evidence refusal establishes no ratio at all.
+    const ok = receipt.coverageKnown === false && receipt.coverageBps === null;
     return check(
       "family",
       "evidence refusal states no ratio",
       ok,
       ok
         ? "no ratio quoted, as an evidence refusal requires"
-        : `an evidence refusal reported coverageKnown=${receipt.coverageKnown} and ${receipt.coverageBps} bps, ` +
+        : `an evidence refusal reported coverageKnown=${receipt.coverageKnown} and coverageBps=${JSON.stringify(receipt.coverageBps)}, ` +
           `which conflates "we could not tell" with a finding about the asset`,
     );
   }
@@ -159,16 +165,82 @@ export function checkFamilyInvariant(receipt: StoredReceipt): Check {
   );
 }
 
+/**
+ * Keys an anchored record must not contain when no ratio was established.
+ *
+ * This is the negative control for the defect that shipped in the first
+ * encoding: an evidence refusal carrying `"bps": 0` is not "no ratio", it is a
+ * claim of zero percent coverage, and it is byte-identical in that field to a
+ * genuine `no_attributable_positions` finding. Absence is the only unambiguous
+ * encoding, so presence alone is a failure regardless of the value.
+ */
+/**
+ * The ratio we assert, as opposed to the readings a reader may divide.
+ *
+ * The distinction matters. `val` and `obl` are measured quantities: on an asset
+ * finding they are the finding, and a reader who divides them gets a true
+ * number about a real position. `bps` and `floor` are our verdict, and
+ * publishing them where no verdict was reached is the fabrication.
+ */
+const ASSERTED_RATIO_KEYS = ["bps", "floor"] as const;
+
+/** An evidence refusal has no measurements either, so it publishes none. */
+const EVIDENCE_FORBIDDEN_KEYS = [
+  ...ASSERTED_RATIO_KEYS,
+  "blk",
+  "obs",
+  "ud",
+  "out",
+  "par",
+  "obl",
+  "val",
+  "ss",
+  "vsh",
+  "srch",
+  "pos",
+] as const;
+
+/**
+ * An evidence-family record must publish nothing a reader could turn into a
+ * coverage figure — not a zero, not an empty string, nothing at all.
+ */
+export function checkNoPhantomRatio(record: AnchorRecord): Check {
+  const asRecord = record as unknown as Record<string, unknown>;
+  const isEvidenceRefusal = record.d === "refused" && record.fam === "evidence";
+  const forbidden = isEvidenceRefusal
+    ? EVIDENCE_FORBIDDEN_KEYS
+    : record.known === false
+      ? ASSERTED_RATIO_KEYS
+      : [];
+
+  const present = forbidden.filter((key) => key in asRecord);
+  return check(
+    "no-phantom-ratio",
+    "no coverage figure is published where none was established",
+    present.length === 0,
+    present.length === 0
+      ? isEvidenceRefusal
+        ? "evidence refusal carries no ratio, block, hash or readings"
+        : record.known === false
+          ? "no ratio is quoted, and no key from which one could be read"
+          : "not applicable: a ratio was established"
+      : `record contains ${present.map((k) => `${k}=${JSON.stringify(asRecord[k])}`).join(", ")} ` +
+        `despite establishing no ratio; a zero here reads as zero percent coverage`,
+  );
+}
+
 /** Cross-check an anchored record against the receipt it claims to summarise. */
 export function checkAnchorBinding(record: AnchorRecord, receipt: StoredReceipt): Check[] {
   const fields: Array<[string, unknown, unknown]> = [
     ["requestId", record.rid, receipt.requestId],
     ["noteId", record.n, receipt.noteId],
     ["decision", record.d, receipt.decision],
-    ["sourceHash", record.srch, receipt.sourceHash],
+    // Both sides normalise absence to null, so a missing key and an explicit
+    // null agree while a zero still stands out.
+    ["sourceHash", record.srch ?? null, receipt.sourceHash ?? null],
     ["signature", record.sig, receipt.signature],
     ["attestor", record.att.toLowerCase(), receipt.attestor.toLowerCase()],
-    ["coverageBps", record.bps, receipt.coverageBps],
+    ["coverageBps", record.bps ?? null, receipt.coverageBps ?? null],
     ["charged", record.chg, receipt.chargeTransactionId !== null],
   ];
   const mismatches = fields.filter(([, a, b]) => a !== b);

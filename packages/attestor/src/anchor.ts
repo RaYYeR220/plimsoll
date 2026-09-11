@@ -33,6 +33,21 @@ export class AnchorTooLarge extends Error {
  */
 export type AnchoredPosition = [string, string, string, number];
 
+/**
+ * The anchored receipt.
+ *
+ * Almost every numeric field is optional, and that is the point. An earlier
+ * version always emitted them, zeroing what it did not know, so an evidence
+ * refusal went on chain carrying `"bps": 0` — indistinguishable from a genuine
+ * zero-coverage finding and unsafe in exactly the direction that matters. A
+ * reader must be structurally unable to extract a number that was never
+ * established, so those keys are now absent rather than zero.
+ *
+ * Two rules govern presence:
+ *   - `bps` and `floor` appear only when a ratio was actually computed.
+ *   - the evidence block appears only when evidence exists, and never for an
+ *     evidence-family refusal, whose whole claim is that it has none.
+ */
 export interface AnchorRecord {
   /** Format discriminator, so a reader can reject anything else on this topic. */
   p: "plimsoll/coverage";
@@ -45,19 +60,20 @@ export interface AnchorRecord {
   rsn?: string;
   /** Whether a ratio was known. Absent on an attestation, where it is implied. */
   known?: boolean;
-  bps: number;
-  floor: number;
-  blk: string;
-  obs: number;
+  /** Present only when a ratio was computed. */
+  bps?: number;
+  floor?: number;
+  blk?: string;
+  obs?: number;
   pol: string;
-  ud: number;
-  out: string;
-  par: string;
-  obl: string;
-  val: string;
-  ss: string;
-  vsh: string;
-  srch: string;
+  ud?: number;
+  out?: string;
+  par?: string;
+  obl?: string;
+  val?: string;
+  ss?: string;
+  vsh?: string;
+  srch?: string;
   att: string;
   sig: string;
   /** Whether HBAR moved. The claim the verifier checks against the mirror node. */
@@ -65,7 +81,7 @@ export interface AnchorRecord {
   tx?: string;
   pos?: AnchoredPosition[];
   /** 1 when positions are inline, 0 when they were dropped to fit. */
-  full: 0 | 1;
+  full?: 0 | 1;
 }
 
 export interface AnchorInput {
@@ -91,29 +107,22 @@ export function buildAnchorRecord(input: AnchorInput): AnchorRecord {
   const evidence = verdict.evidence;
   const maxPositions = input.maxPositions ?? 6;
 
+  const isEvidenceRefusal = verdict.decision === "refused" && verdict.family === "evidence";
+  const ratioKnown = verdict.decision === "attested" || verdict.coverageKnown;
+  // An evidence refusal states it has no evidence, so it carries none. Anything
+  // it did observe is deliberately not published as fact.
+  const publishEvidence = evidence !== null && !isEvidenceRefusal;
+
   const base: AnchorRecord = {
     p: "plimsoll/coverage",
     v: 1,
     rid: requestId,
     n: verdict.noteId,
     d: verdict.decision,
-    bps: verdict.decision === "attested" ? verdict.coverageBps : verdict.coverageBps,
-    floor: evidence?.floorBps ?? 0,
-    blk: evidence?.asOfBlock ?? "0",
-    obs: evidence?.observedAt ?? 0,
     pol: evidence?.policyId ?? "unknown",
-    ud: evidence?.unitDecimals ?? 0,
-    out: evidence?.notesOutstanding ?? "0",
-    par: evidence?.parPerNote ?? "0",
-    obl: evidence?.obligation ?? "0",
-    val: evidence?.attributableValue ?? "0",
-    ss: evidence ? `${evidence.sourceSet.kind}:${evidence.sourceSet.dataset}` : "none",
-    vsh: shortHash(evidence?.vaultSetHash ?? "0x", 8),
-    srch: verdict.sourceHash,
     att: verdict.attestor,
     sig: verdict.signature,
     chg: charge !== null,
-    full: 1,
   };
 
   if (verdict.decision === "refused") {
@@ -123,9 +132,33 @@ export function buildAnchorRecord(input: AnchorInput): AnchorRecord {
   }
   if (charge) base.tx = charge.transactionId;
 
-  const positions = (evidence?.positions ?? []).map(
-    (p): AnchoredPosition => [p.vault.replace(/^0x/, ""), p.assets, p.shares, p.assetDecimals],
-  );
+  // The ratio and the line it is measured against travel together: a floor with
+  // no ratio invites the reader to supply the missing half.
+  if (ratioKnown && publishEvidence) {
+    // publishEvidence implies a ratio was computed, so this is never null here.
+    base.bps = verdict.coverageBps!;
+    base.floor = evidence!.floorBps;
+  }
+
+  if (publishEvidence) {
+    base.blk = evidence!.asOfBlock;
+    base.obs = evidence!.observedAt;
+    base.ud = evidence!.unitDecimals;
+    base.out = evidence!.notesOutstanding;
+    base.par = evidence!.parPerNote;
+    base.obl = evidence!.obligation;
+    base.val = evidence!.attributableValue;
+    base.ss = `${evidence!.sourceSet.kind}:${evidence!.sourceSet.dataset}`;
+    base.vsh = shortHash(evidence!.vaultSetHash, 8);
+    base.srch = verdict.sourceHash!;
+    base.full = 1;
+  }
+
+  const positions = publishEvidence
+    ? evidence!.positions.map(
+        (p): AnchoredPosition => [p.vault.replace(/^0x/, ""), p.assets, p.shares, p.assetDecimals],
+      )
+    : [];
 
   if (positions.length > 0 && positions.length <= maxPositions) {
     base.pos = positions;

@@ -77,6 +77,42 @@ Everything below runs against live infrastructure and is exercised by the test s
 | HCS-14 UAID | real, with a caveat. Pure offline SHA-384, no dependencies. See the field-ordering note in README limits. |
 | `verify-charge` | real. Zero credentials, public data only. |
 
+## Records on the topic that predate the current encoding
+
+HCS topic `0.0.10451091` has no admin key, so nothing written to it can be
+withdrawn — including our mistakes. Sequences 1 through 11 were written with
+the first anchor encoding, which zeroed numeric fields it did not know. Their
+evidence-family refusal (seq 9) therefore carries `"bps": 0`, a figure that
+reads as zero percent coverage although none was established. The settlements and
+charge claims in those records are accurate; the zeroed fields are not.
+
+Their refusal signatures were made over the retired single `Refusal` EIP-712
+type, which the corrected code no longer defines. That has one visible
+consequence, measured rather than assumed:
+
+| legacy record | checked from the record alone | checked with our stored receipt |
+| --- | --- | --- |
+| seq 7, attestation | CHARGED AND WARRANTED | CHARGED AND WARRANTED |
+| seq 8, asset refusal | REFUSED AND NOT CHARGED | DISCREPANCY: signature recovers to another address |
+| seq 9, evidence refusal | DISCREPANCY: `bps=0` and eleven other zeroed keys | DISCREPANCY |
+
+The record-alone column is what a stranger sees, and it is right: the only
+legacy record it convicts is the one whose content is actually wrong. The
+receipt column only arises for us, because the old receipts live in our local,
+gitignored data directory; the signature failure there is the old type meeting
+the new verifier, not a forged record. The `Attestation` type did not change,
+so every legacy attestation still verifies fully.
+
+A further wart, disclosed rather than fixed: both encodings carry `"v": 1`. The
+record therefore cannot say which encoding it uses; the sequence number is the
+discriminator. Bumping the version now would split the corrected records across
+two version labels, which would be more confusing than the collision.
+
+They are left in place and disclosed rather than hidden. Sequences 12, 13 and
+14 are the canonical attested, asset-refusal and evidence-refusal records in
+the corrected encoding, and `verify-charge` reports the older evidence refusal
+as a failed check rather than passing it.
+
 ## The seam, in code
 
 Marked in three places so it cannot be missed:

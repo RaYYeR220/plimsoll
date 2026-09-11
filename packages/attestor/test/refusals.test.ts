@@ -2,14 +2,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { attest, RATIO_BEARING_REASONS } from "../src/attest.js";
 import { FixtureCoverageSource, LiveCoverageSource } from "../src/coverage/index.js";
-import { createAttestorSigner, recoverRefusalSigner } from "../src/eip712.js";
 import {
-  ALL_REFUSAL_REASONS,
-  REFUSAL_FAMILY_CODE,
-  familyOf,
-  httpStatusFor,
-  type RefusalReason,
-} from "../src/reasons.js";
+  createAttestorSigner,
+  isAssetRefusalMessage,
+  recoverRefusalSigner,
+  refusalToWire,
+} from "../src/eip712.js";
+import { ALL_REFUSAL_REASONS, familyOf, httpStatusFor, type RefusalReason } from "../src/reasons.js";
 import { TEST_ATTESTOR_KEY } from "./helpers.js";
 
 const signer = createAttestorSigner(TEST_ATTESTOR_KEY);
@@ -44,8 +43,13 @@ describe("the refusal taxonomy", () => {
       assert.equal(verdict.family, familyOf(reason));
       assert.equal(verdict.httpStatus, httpStatusFor(familyOf(reason)));
       assert.equal(verdict.chargeable, false);
-      assert.equal(verdict.message.family, REFUSAL_FAMILY_CODE[familyOf(reason)]);
       assert.equal(verdict.message.reason, reason);
+      // The family is carried by the EIP-712 type name, not a field, so a
+      // signature over one family cannot be re-encoded as the other.
+      assert.equal(
+        isAssetRefusalMessage(verdict.message),
+        familyOf(reason) === "asset",
+      );
 
       const recovered = await recoverRefusalSigner(verdict.message, verdict.signature);
       assert.equal(recovered, signer.address, "the refusal must be signed by the attestor");
@@ -65,9 +69,20 @@ describe("the two families stay distinct", () => {
       const verdict = await attest(noteId, { source, signer });
       assert.equal(verdict.decision, "refused");
       assert.equal(verdict.coverageKnown, false, `${reason} must not claim to know a ratio`);
-      assert.equal(verdict.coverageBps, 0, `${reason} must report no ratio, not a zero one`);
-      assert.equal(verdict.message.coverageKnown, false, "the signature must commit to not knowing");
-      assert.equal(verdict.message.coverageBps, 0);
+      assert.equal(
+        verdict.coverageBps,
+        null,
+        `${reason} must report no ratio at all; a zero reads as zero percent coverage`,
+      );
+      assert.equal(verdict.evidence, null, `${reason} must not publish evidence it distrusts`);
+      assert.equal(verdict.sourceHash, null);
+
+      // The signed payload has nowhere to put a figure.
+      assert.equal(isAssetRefusalMessage(verdict.message), false);
+      const wire = refusalToWire(verdict.message);
+      for (const key of ["coverageBps", "coverageKnown", "asOfBlock", "vaultSetHash", "sourceHash"]) {
+        assert.equal(key in wire, false, `${reason} wire form must not contain ${key}`);
+      }
     }
   });
 
@@ -76,6 +91,7 @@ describe("the two families stay distinct", () => {
       const verdict = await attest(REASON_FIXTURES[reason], { source, signer });
       assert.equal(verdict.decision, "refused");
       assert.equal(verdict.coverageKnown, true, `${reason} must quote its ratio`);
+      assert.ok(isAssetRefusalMessage(verdict.message));
       assert.equal(verdict.message.coverageKnown, true);
     }
   });
@@ -93,7 +109,7 @@ describe("the two families stay distinct", () => {
     assert.equal(verdict.decision, "refused");
     assert.equal(verdict.family, "evidence");
     assert.equal(verdict.evidence, null, "no evidence means no evidence, not empty evidence");
-    assert.equal(verdict.message.vaultSetHash, `0x${"00".repeat(32)}`);
+    assert.equal(isAssetRefusalMessage(verdict.message), false, "signed as EvidenceRefusal");
   });
 });
 

@@ -17,13 +17,14 @@ export interface StoredReceipt {
   decision: "attested" | "refused";
   family: "asset" | "evidence" | null;
   reason: string | null;
-  coverageBps: number;
+  /** Null when no ratio was established. Never zero: a zero is a finding. */
+  coverageBps: number | null;
   coverageKnown: boolean;
   /** Signed EIP-712 message in wire form. */
   message: Record<string, unknown>;
   signature: string;
   attestor: string;
-  sourceHash: string;
+  sourceHash: string | null;
   evidence: Evidence | null;
   /** Settlement id when a charge happened; null is the claim that none did. */
   chargeTransactionId: string | null;

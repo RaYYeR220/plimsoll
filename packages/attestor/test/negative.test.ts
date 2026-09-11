@@ -11,11 +11,17 @@ import {
   ATTESTATION_TYPES,
   attestationToWire,
   createAttestorSigner,
+  recoverRefusalSigner,
   refusalToWire,
 } from "../src/eip712.js";
 import { NonceStore } from "../src/receipts.js";
 import type { StoredReceipt } from "../src/receipts.js";
-import { checkAnchorBinding, checkReceipt, verifyAttestation } from "../src/verify.js";
+import {
+  checkAnchorBinding,
+  checkNoPhantomRatio,
+  checkReceipt,
+  verifyAttestation,
+} from "../src/verify.js";
 import { TEST_ATTESTOR_KEY } from "./helpers.js";
 
 /**
@@ -43,7 +49,7 @@ function toReceipt(verdict: Awaited<ReturnType<typeof attest>>): StoredReceipt {
     coverageKnown: verdict.decision === "attested" ? true : verdict.coverageKnown,
     message:
       verdict.decision === "attested"
-        ? attestationToWire(verdict.message)
+        ? attestationToWire(verdict.message as never)
         : refusalToWire(verdict.message),
     signature: verdict.signature,
     attestor: verdict.attestor,
@@ -79,7 +85,7 @@ describe("a forged signature must fail", () => {
     assert.notEqual(forged, verdict.signature);
 
     const result = await verifyAttestation({
-      message: attestationToWire(verdict.message),
+      message: attestationToWire(verdict.message as never),
       signature: forged,
       expectedAttestor: signer.address,
     });
@@ -106,7 +112,7 @@ describe("a forged signature must fail", () => {
     const mangled = `${verdict.signature.slice(0, 10)}${flipped}${verdict.signature.slice(11)}`;
     assert.notEqual(mangled, verdict.signature);
     const result = await verifyAttestation({
-      message: attestationToWire(verdict.message),
+      message: attestationToWire(verdict.message as never),
       signature: mangled,
       expectedAttestor: signer.address,
     });
@@ -173,6 +179,86 @@ describe("a tampered HCS record must fail", () => {
   });
 });
 
+describe("a phantom coverage figure must fail", () => {
+  it("rejects an evidence refusal whose record carries a bps key at all", async () => {
+    const verdict = await attest("NOTE-INDIA", { source, signer });
+    assert.equal(verdict.decision, "refused");
+    assert.equal(verdict.family, "evidence");
+
+    const record = buildAnchorRecord({ requestId: "deadbeefdeadbeef", verdict, charge: null });
+    assert.equal(checkNoPhantomRatio(record).passed, true, "a correct record must pass");
+
+    // Re-introduce the defect exactly as it shipped: a zero, not a wrong number.
+    (record as unknown as Record<string, unknown>).bps = 0;
+    const reintroduced = checkNoPhantomRatio(record);
+    assert.equal(reintroduced.passed, false, "an evidence refusal carrying bps=0 MUST fail");
+    assert.match(reintroduced.detail, /bps=0/);
+    assert.match(reintroduced.detail, /reads as zero percent coverage/);
+  });
+
+  it("rejects the rest of the zeroed evidence block too", async () => {
+    const verdict = await attest("NOTE-INDIA", { source, signer });
+    for (const [key, value] of [
+      ["floor", 0],
+      ["blk", "0"],
+      ["obs", 0],
+      ["val", "0"],
+      ["obl", "0"],
+      ["ss", "none"],
+      ["vsh", ""],
+      ["srch", `0x${"00".repeat(32)}`],
+    ] as const) {
+      const record = buildAnchorRecord({ requestId: "deadbeefdeadbeef", verdict, charge: null });
+      (record as unknown as Record<string, unknown>)[key] = value;
+      assert.equal(
+        checkNoPhantomRatio(record).passed,
+        false,
+        `an evidence refusal carrying "${key}" MUST fail, even as a sentinel`,
+      );
+    }
+  });
+
+  it("rejects a ratio smuggled into an asset finding that established none", async () => {
+    const verdict = await attest("NOTE-CHARLIE", { source, signer });
+    const record = buildAnchorRecord({ requestId: "deadbeefdeadbeef", verdict, charge: null });
+    assert.equal(checkNoPhantomRatio(record).passed, true);
+
+    (record as unknown as Record<string, unknown>).bps = 13125;
+    assert.equal(
+      checkNoPhantomRatio(record).passed,
+      false,
+      "declared_exceeds_real quotes no ratio, so a bps key is a fabrication",
+    );
+  });
+
+  it("cannot re-encode a signed evidence refusal as one carrying a figure", async () => {
+    const verdict = await attest("NOTE-INDIA", { source, signer });
+    assert.equal(verdict.decision, "refused");
+
+    // Take the genuine signature and try to present it as an asset refusal that
+    // reports zero coverage. The primary type is hashed into the digest, so the
+    // forgery recovers to a different address.
+    const forged = {
+      noteId: verdict.noteId,
+      reason: verdict.reason,
+      coverageKnown: false,
+      coverageBps: 0,
+      asOfBlock: 0n,
+      vaultSetHash: `0x${"00".repeat(32)}`,
+      sourceHash: `0x${"00".repeat(32)}`,
+      expiry: verdict.message.expiry,
+      nonce: verdict.message.nonce,
+    } as const;
+
+    const recovered = await recoverRefusalSigner(forged as never, verdict.signature);
+    assert.notEqual(
+      recovered.toLowerCase(),
+      signer.address.toLowerCase(),
+      "an EvidenceRefusal signature MUST NOT validate as an AssetRefusal",
+    );
+  });
+});
+
 describe("a replayed nonce must fail", () => {
   it("refuses to issue the same nonce twice", async () => {
     const nonces = new NonceStore(DATA_DIR);
@@ -187,7 +273,7 @@ describe("a replayed nonce must fail", () => {
 
     const seen = new Set<string>([verdict.message.nonce]);
     const result = await verifyAttestation({
-      message: attestationToWire(verdict.message),
+      message: attestationToWire(verdict.message as never),
       signature: verdict.signature,
       expectedAttestor: signer.address,
       seenNonces: seen,
@@ -213,7 +299,7 @@ describe("an expired attestation must fail", () => {
     const expiry = Number(verdict.message.expiry);
 
     const stillFresh = await verifyAttestation({
-      message: attestationToWire(verdict.message),
+      message: attestationToWire(verdict.message as never),
       signature: verdict.signature,
       expectedAttestor: signer.address,
       now: expiry - 1,
@@ -221,7 +307,7 @@ describe("an expired attestation must fail", () => {
     assert.equal(stillFresh.valid, true, "it must be valid right up to its expiry");
 
     const expired = await verifyAttestation({
-      message: attestationToWire(verdict.message),
+      message: attestationToWire(verdict.message as never),
       signature: verdict.signature,
       expectedAttestor: signer.address,
       now: expiry + 1,

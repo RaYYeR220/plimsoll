@@ -120,7 +120,10 @@ describe("the live source seam", () => {
     assert.equal(verdict.reason, "source_unavailable");
     assert.equal(verdict.family, "evidence");
     assert.equal(verdict.coverageKnown, false);
-    assert.equal(verdict.coverageBps, 0);
+    // null, not 0: an unreachable source establishes no ratio, and a zero here
+    // would read as zero percent coverage.
+    assert.equal(verdict.coverageBps, null);
     assert.equal(verdict.evidence, null);
+    assert.equal(verdict.sourceHash, null);
   });
 });

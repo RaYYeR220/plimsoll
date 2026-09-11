@@ -3,12 +3,20 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { AnchorRecord } from "../src/anchor.js";
-import { MirrorClient, hashscanTopic, hashscanTx, netForAccount, toMirrorTxId } from "../src/mirror.js";
+import {
+  MirrorClient,
+  hashscanTopic,
+  hashscanTx,
+  netForAccount,
+  releaseHttpPool,
+  toMirrorTxId,
+} from "../src/mirror.js";
 import type { StoredReceipt } from "../src/receipts.js";
 import {
   type Check,
   check,
   checkAnchorBinding,
+  checkNoPhantomRatio,
   checkReceipt,
   recomputeCoverageBps,
 } from "../src/verify.js";
@@ -96,7 +104,7 @@ export interface VerificationResult {
   decision: string;
   reason: string | null;
   family: string | null;
-  anchoredBps: number;
+  anchoredBps: number | null;
   recomputedBps: number | null;
   floorBps: number;
   charged: boolean;
@@ -154,12 +162,16 @@ export async function verifyCharge(args: Args): Promise<VerificationResult> {
   const decision = record?.d ?? receipt!.decision;
   const noteId = record?.n ?? receipt!.noteId;
   const floorBps = record?.floor ?? receipt!.evidence?.floorBps ?? 0;
-  const anchoredBps = record?.bps ?? receipt!.coverageBps;
+  // null means no ratio was ever established, which is different from zero.
+  const anchoredBps = record?.bps ?? receipt?.coverageBps ?? null;
   const claimedCharge = record ? record.chg : receipt!.chargeTransactionId !== null;
   const settlementTxId = record?.tx ?? receipt?.chargeTransactionId ?? null;
   const family = record?.fam ?? receipt?.family ?? null;
 
   if (receipt) checks.push(...(await checkReceipt(receipt)));
+  // Run before anything reads a figure off the record, so a phantom ratio is
+  // reported as the encoding fault it is rather than as an arithmetic mismatch.
+  if (record) checks.push(checkNoPhantomRatio(record));
   if (record && receipt) checks.push(...checkAnchorBinding(record, receipt));
   if (record && !receipt) {
     checks.push(
@@ -410,27 +422,44 @@ function render(result: VerificationResult, explain: boolean): string {
   return lines.join("\n");
 }
 
+/**
+ * Exit codes are this tool's machine-readable output, so they have to be exact.
+ *
+ * `process.exit()` tears the loop down immediately, and calling it while the
+ * keep-alive sockets left over from the mirror-node fetches are mid-close trips
+ * a libuv assertion in Node on Windows — which exits 127 and looks, to any
+ * script reading the code, like the verifier crashed rather than reached a
+ * verdict. Setting `exitCode` and letting the loop drain gives the same code
+ * without the race; `unref` on the sockets keeps the drain from waiting out
+ * the keep-alive timeout.
+ */
+function finish(code: number): void {
+  process.exitCode = code;
+  void releaseHttpPool();
+}
+
 async function main(): Promise<void> {
   let args: Args;
   try {
     args = parseArgs(process.argv.slice(2));
   } catch (error) {
-    console.error(`${(error as Error).message}\n`);
+    console.error(`${(error as Error).message}
+`);
     console.error(usage());
-    process.exit(3);
+    return finish(3);
   }
 
   try {
     const result = await verifyCharge(args);
     console.log(args.json ? JSON.stringify(result, null, 2) : render(result, args.explain));
-    process.exit(result.verdict === VERDICTS.discrepancy ? 2 : 0);
+    return finish(result.verdict === VERDICTS.discrepancy ? 2 : 0);
   } catch (error) {
     if (error instanceof NotEnoughEvidence) {
       console.error(`cannot evaluate: ${error.message}`);
-      process.exit(3);
+      return finish(3);
     }
     console.error(error);
-    process.exit(3);
+    return finish(3);
   }
 }
 
