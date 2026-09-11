@@ -70,7 +70,11 @@ before the number, so we never call an issuer short on evidence we no longer tru
 
 ### `BerthMarket`, concretely
 
-- **Asks escrow.** `createHoldFromByPartition` puts the maker's notes in an ATS hold with
+- **Asks escrow.** The maker first `approve`s the venue for the amount: ATS funds a third-party hold
+  from an ERC-20 allowance (`decreaseAllowedBalanceForHold`) and refuses operator rights alone with
+  `InsufficientAllowance`. `script/ProbeEscrow.s.sol` confirmed it against the live PLIM-B note on a
+  fork: operator rights only reverted, and after an `approve` the market created the hold and
+  executed it to the buyer. Operator rights are what a bid needs. `createHoldFromByPartition` puts the maker's notes in an ATS hold with
   `to == address(0)`, which ATS reads as "destination not fixed at creation". That is what lets a
   resting order be escrowed before any taker exists, and it means settlement is one hop from maker
   to taker. **The venue is the hold's escrow but never its destination, so it never custodies a
@@ -105,10 +109,13 @@ re-arm itself from inside its own execution. That is the interesting part and th
   coupon. So they are caught, counted and evented. The safety property is preserved *before* the
   attempt: coverage is checked first, so a swallowed failure can never become a payment.
 
-Coverage is fed into ATS through `KpisFacet.addKpiData`, which is what `KpiLinkedRateFacet` reads at
-coupon fixing — so the coupon rate is a function of coverage inside ATS's own architecture rather
-than a number bolted on beside it. A low reading is written just like a high one; suppressing it
-would flatter the issuer. What is never written is a number we cannot prove.
+The scheduler also writes the provable coverage reading into the note's KPI series through
+`KpisFacet.addKpiData`, which is what `KpiLinkedRateFacet` reads at coupon fixing - the route by
+which a coupon rate becomes a function of coverage inside ATS's own architecture. A low reading is
+written just like a high one; what is never written is a number we cannot prove. **On the notes
+deployed here that write is refused**: bond config `0x…02` v1 registers neither the Kpis nor the
+KpiLinkedRate facet, so `addKpiData` returns `FunctionNotFound`. The scheduler catches it and emits
+`CoveragePushFailed`, and the coupon itself is unaffected. See honest limits.
 
 ---
 
@@ -178,6 +185,8 @@ All seven verified on Sourcify, `exact_match`. Full record with every transactio
 `PLIM-A` / ISIN `US0000PLIMA6`, `0xe2Bf359650fbacc7D4801336F8C1FE7061aD6387` (`0.0.10451856`).
 10,000.00 issued, 1,000.00 transferred to a second KYC'd holder.
 
+**A second note, sized to real backing** — `PLIM-B` / ISIN `US0000PLIMB4`, `0xCf759C717E805413aaa7D067dB7BD7A93969Def2` (`0.0.10482316`): 10.00 notes at par 1.00 USD, an on-chain obligation of **$10.00**, read back through `NominalValueFacet` (`getBondDetails()` does not exist on ATS v8). Its load line of 100.00% was set by a device-signed mandate, not an owner call. It is registered with the oracle under a placeholder vault set that spells `PLACEHOLDER-NOT-A-VAULT-SET`, so it reads *unproven* until the real Base vault list is registered. The market is authorised and approved to escrow an ask, and a quarterly coupon schedule is created but not armed; both wait on a clear line. PLIM-A, at $1,000,000 against the same backing, is the negative control and must always refuse.
+
 **The cash leg** — HTS native token `PCASH`, `0.0.10474297`, 6 decimals, freeze key as above.
 
 ### Asset Tokenization Studio v8.0.0 (already deployed; we deploy none of it)
@@ -198,7 +207,10 @@ then a transfer to it was attempted:
 > `0x796c1f0d` + `0000…5da97170646574339edc856f5c04b99668e27f38`
 > = `AccountIsBlocked(0x5da9…7f38)`
 
-The error is declared zero-arg in the ATS interface, but the revert appends the ABI-encoded address.
+`0x796c1f0d` is the selector of `AccountIsBlocked(address)` - the one-argument form - so the blocked
+address is a declared parameter, ABI-encoded in the revert, not trailing detail. ATS does use the
+other shape elsewhere: refusing to revoke an operator that holds no KYC reverts with the
+zero-argument `InvalidKycStatus()` (`0xfc855b1b`) followed by the address as extra data.
 
 And the same refusal seen through the **non-reverting pre-flight** that `BerthMarket` calls before
 it books anything — the whole point being that a compliant venue never *reaches* the revert above:
@@ -249,12 +261,12 @@ Full transcript and every signature: [`deployments/device-proof.json`](deploymen
 
 ## Tests
 
-**199 passing, 0 failing, 10 suites.** `forge test`
+**201 passing, 0 failing, 10 suites.** `forge test`
 
 | Suite | Tests | Covers |
 |---|---|---|
 | `CoverageOracle.t.sol` | 39 | Every fail-closed branch; replay, expiry, vault-set swap, wrong key, malleable signature, cross-deployment replay |
-| `BerthMarket.t.sol` | 36 | Escrow, settlement, partial fills, cancel/reap, every pre-flight refusal, coverage gate |
+| `BerthMarket.t.sol` | 38 | Escrow, settlement, partial fills, cancel/reap, every pre-flight refusal, coverage gate, the ask allowance |
 | `CouponScheduler.t.sol` | 30 | Arming, withholding, hopping, termination, runaway caps, rejected reschedules |
 | `MandateVerifier.t.sol` | 26 | The device mandate, against a signature a real Ledger produced |
 | `LoadLine.t.sol` | 24 | Refusal ordering, mandate gating, owner gating, fail-closed wiring |
@@ -309,10 +321,12 @@ Largest is 35% of the limit. Logic lives in libraries (`Coverage`, `Preflight`, 
 
 ```bash
 forge build
-forge test                       # 199 tests
+forge test                       # 201 tests
 forge test --profile ci          # 4096 fuzz runs, 512 invariant runs
 forge build --sizes              # EIP-170 margins
 python deployments/verify-ids.py # every deployed id, checked against the mirror node
+node script/vault-set-hash.mjs 0xVaultA 0xVaultB   # the vault-set hash, by the attestor's own code
+forge script script/ProbeEscrow.s.sol --fork-url $HEDERA_RPC_URL   # dry-run an ask on live ATS
 ```
 
 `forge-std` is vendored under `lib/` rather than installed as a submodule, so a fresh clone runs the
@@ -364,7 +378,7 @@ it to `none`.
 | `MANDATE_AUTHORITY_SIGNER` | The key whose signature `MandateVerifier` accepts — a device in production |
 | `ATTESTOR` | The service key that signs EIP-712 coverage attestations |
 | `NOTE_MARKET` | The market code a human reads on the device. `noteId` is `keccak256` of it |
-| `VAULT_SET_HASH` | Commits to the exact set of backing vaults |
+| `VAULT_SET_HASH` | Commits to the exact set of backing vaults. Compute it with `node script/vault-set-hash.mjs`, never by hand |
 | `MAX_AGE_SECONDS` | Protocol-side freshness bound; 0 leaves expiry as the only backstop |
 | `CASH_TOKEN` | EVM address of the HTS cash token |
 | `CASH_CREATE_FEE_WEI` | HBAR to forward for the HTS create fee |
@@ -408,6 +422,12 @@ valid halt or threshold mandate and requires both doors to refuse it with no non
 states still in agreement; and the live on-chain sequence above. What remains is the owner: it can
 still repoint `LoadLine` at a different authority, as stated below.
 
+**Coverage does not yet drive the coupon rate on these notes.** The integration is built and
+tested against a mock of the Kpis facet, but the ATS bond configuration used here (`0x…02`,
+version 1) does not include the Kpis or KpiLinkedRate facets: on PLIM-A, `getMinDate()` and
+`addKpiData` both revert `FunctionNotFound`. Making the rate coverage-linked needs a note issued
+from a resolver configuration that registers those facets, then `initializeKpiLinkedRate`.
+
 **"How old is this data" is answered in wall-clock seconds, not source-chain blocks.** There is no
 light client for the source chain, so we cannot know its true head. `asOfBlock` is still load-bearing
 — it is checked for regression at intake, which catches an attestor replaying old vault data under a
@@ -449,6 +469,40 @@ an emulator's seed exists as a string on the machine running it.
 **Testnet resets wipe both state and Sourcify verifications.** These addresses were deployed
 2026-09-10 and may need redeploying and re-verifying.
 
+**The attestor's signatures cannot yet be verified on-chain.** The attestor signs EIP-712 over domain
+`Plimsoll Attestor` with no `verifyingContract`, a `string noteId`, a `uint32` coverage and a random
+`bytes32` nonce. `CoverageOracle` verifies domain `Plimsoll CoverageOracle` with a `verifyingContract`,
+a `bytes32 noteId`, a `uint64` coverage and a strictly increasing `uint64` nonce. Nothing the attestor
+signs today will verify here. The note ids line up - EIP-712 hashes a string as `keccak256`, which is
+exactly how a market code becomes a note id. The decision is that the attestor adapts: this contract
+stays as deployed and is the single definition of the digest, which keeps `LoadLine`, the cash token
+and the verified record intact. Until the attestor's digests match it byte for byte, nothing can
+attest either note.
+
+**Both notes are registered with placeholder vault sets.** PLIM-A's `0x2627c1d5…9d57` is
+`sha256("plimsoll/vaults/v1")`, a string hashed by a one-off environment bootstrap, not a vault set;
+PLIM-B's is the readable placeholder above. `CoverageOracle` never computes this hash, so there is one
+definition, the attestor's `canonicalHash` over the lowercase sorted vault list, and
+`script/vault-set-hash.mjs` calls that code directly. Until `setVaultSet` is called with its output,
+each note refuses for an evidence reason (`VaultSetChanged`), not because it is short. The real sets
+will be disjoint - one position backs one note - and `setVaultSet` waits on the final Base vault lists.
+
+**`BerthMarket.placeAsk`'s own comment says operator rights suffice. They do not.** Real ATS requires an
+allowance, as above. The deployed bytecode is verified against the source as written, so the comment is
+left in place rather than edited out of step with the chain; this README is the correct statement, and
+the next deployment of the market should carry the fix.
+
+**The circuit breaker freezes an account, not a note.** HTS freeze is per token and account, so a payer
+shared by two notes is frozen for both when either breaches. PLIM-A is permanently short, so PLIM-B's
+coupon payer must never be PLIM-A's; no payer is registered for either yet.
+
+**A retired market still holds operator rights on PLIM-B.** A connect step first ran against the
+superseded venue. The KPI role and the stray schedule were undone; the operator grant was not, because
+ATS refuses to revoke an operator that holds no KYC. It is inert - that market can only escrow once the
+retired LoadLine clears PLIM-B, which never happens. Granting KYC to a dead contract purely to tidy a
+grant nobody can exercise is more risk than the grant itself, so it is deliberately left in place and
+every step is in the deployment record.
+
 **Not audited.** Three days of work for a hackathon.
 
 ---
@@ -469,8 +523,8 @@ packages/contracts/
 │   │   └── MandateVerifierAdapter.sol  IMandateAuthority over the verifier
 │   ├── interfaces/                 IAts, IHederaTokenService, IHederaScheduleService, …
 │   └── libraries/                  Coverage, Preflight, Ecdsa, HederaResponse
-├── test/                           199 tests, 10 suites
-├── script/                         Deploy, Redeploy, IssueNote
+├── test/                           201 tests, 10 suites
+├── script/                         Deploy, Redeploy, LockAuthority, IssueNote, ProbeEscrow, vault-set-hash
 ├── deployments/                    on-chain record, live device proof, mirror-node verifier
 └── lib/forge-std/                  vendored
 ```
