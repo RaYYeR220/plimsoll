@@ -1,0 +1,36 @@
+{
+  "name": "@plimsoll/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MCP server over live ERC-4626 vault data streamed from The Graph Market: vault backing, share-price series and note coverage, every answer with provenance, stale or unresolved data refused instead of guessed.",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "serve": "npm run build && node --env-file-if-exists=.env dist/src/server.js",
+    "record": "npm run build && node --env-file-if-exists=.env dist/bin/record.js",
+    "call": "npm run build && node --env-file-if-exists=.env dist/bin/call.js",
+    "test": "npm run build && node --env-file-if-exists=.env --test \"dist/test/*.test.js\"",
+    "test:offline": "npm run build && node --test \"dist/test/!(live).test.js\""
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^1.10.1",
+    "@connectrpc/connect": "^1.7.0",
+    "@connectrpc/connect-node": "^1.7.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@substreams/core": "^0.17.0",
+    "express": "^5.2.1",
+    "viem": "^2.56.3",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.20.2",
+    "typescript": "^5.9.3"
+  }
+}
