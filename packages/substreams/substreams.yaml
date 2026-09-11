@@ -7,7 +7,12 @@ package:
     entry and exit rates kept separate, nominated holder positions for coverage
     attestation, and Messari Yield Aggregator v1.3.1 entities, derived from
     Pinax's erc4626 extractor. Ethereum mainnet and Base.
-  doc: ./README.md
+  url: https://github.com/RaYYeR220/plimsoll
+  # The Plimsoll line: a circle crossed by a horizontal line, the mark that
+  # says how deeply a hull may be loaded.
+  image: ./plimsoll-mark.png
+  # No doc field: the CLI ignores package.doc and embeds the README.md sitting
+  # beside this manifest, which for this package is the repository README.
 
 network: mainnet
 

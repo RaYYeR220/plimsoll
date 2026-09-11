@@ -444,6 +444,57 @@ logs, and a family marker (`MORPHO()`, `EVC()`, `aToken()` / `POOL()`,
 (`0x73edDFa8…`) is a near-dead wrapper, and that two unrelated vaults share the
 symbol `steakUSDC`. Identify vaults by address, never by symbol.
 
+## Traps in the tooling
+
+Four CLI behaviours cost us a published version between them, and none of them
+produces an error. They are worth knowing before you publish anything.
+
+- **`package.doc` is ignored.** The CLI embeds whichever `README.md` sits
+  beside the manifest, with or without a `./` prefix on the field. A manifest
+  can therefore look correct while the package ships a different document.
+  This is how v0.1.1 went to the registry describing Base and a positions
+  module that are not in it.
+- **Relative paths in a manifest resolve against the working directory**, not
+  against the manifest's own directory. `--manifest sub/dir/substreams.yaml`
+  from the parent resolves `../proto` to the parent's parent, and fails.
+- **`substreams build` expects a `Cargo.toml` beside the manifest.** A second
+  manifest in a subdirectory cannot be built, only packed. `substreams pack` is
+  deprecated in favour of `build`, but it is the right tool when the WASM is
+  already compiled and you are packaging a variant manifest against it.
+- **The registry warns about unset `package.url` and `package.image`, then
+  publishes anyway.** Since a version can be superseded but never replaced, an
+  unset link or a wrong description is permanent. The only remedy is another
+  version number.
+- **`package.url` and `package.image` are write-only.** You can set them, but
+  no command reads them back: `info`, `info --json` and `inspect` all omit
+  `url`, and `info` reports only the image byte length. Confirming that a link
+  reached the binary means searching the package bytes for that exact string.
+  Searching for *any* URL does not work, because the embedded documentation
+  and the protobuf descriptors both carry links; an earlier version of our own
+  check passed a package whose `package.url` was unset for exactly that reason.
+
+The defence is to check the packed artifact rather than the sources it came
+from:
+
+```bash
+python scripts/check_package.py plimsoll-erc4626-v0.2.0.spkg --url https://github.com/RaYYeR220/plimsoll
+python scripts/check_package.py plimsoll-erc4626-v0.1.2.spkg --same-as plimsoll-erc4626-v0.1.1.spkg
+```
+
+It reads the module list out of the package itself, so it keeps working as
+modules come and go, and it:
+
+- fails if the embedded documentation names a module the package does not
+  contain;
+- fails if `package.image` is unset, and, with `--url`, if that exact URL is not
+  in the package bytes;
+- with `--same-as`, proves a change really was documentation-only by comparing
+  every module hash.
+
+The proof that it works is retrospective: run against the published v0.1.1 it
+fails with `map_positions, store_asset_prices`, precisely the defect that forced
+v0.1.2. Run it before every publish.
+
 ## Honest limits
 
 - **Cumulative means since `initialBlock` (25,940,000), not since inception.**
