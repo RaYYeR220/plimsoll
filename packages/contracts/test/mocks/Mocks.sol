@@ -27,7 +27,7 @@ contract MockMandateAuthority is IMandateAuthority {
         _granted[keccak256(abi.encode(action, subject, caller))] = false;
     }
 
-    function requireMandate(bytes32 action, bytes32 subject, bytes calldata) external {
+    function requireMandate(bytes32 action, bytes32 subject, uint256, bytes calldata) external {
         callCount++;
         if (allowAll) return;
         if (!_granted[keccak256(abi.encode(action, subject, msg.sender))]) {

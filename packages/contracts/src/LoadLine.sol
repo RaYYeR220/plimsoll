@@ -130,11 +130,18 @@ contract LoadLine is ILoadLine, Owned {
     // Mandate-gated authority actions
     // ---------------------------------------------------------------------------------------
 
+    /**
+     * @notice Moves the load line to `thresholdBps`.
+     * @dev The number written is bound to the mandate: it is passed to the authority, which must
+     *      revert unless the human approved exactly this value. So a mandate signed for one line
+     *      cannot be spent writing another - the transaction fails before the write, rather than
+     *      succeeding and being caught afterwards.
+     */
     function setThreshold(bytes32 noteId, uint64 thresholdBps, bytes calldata proof) external {
-        mandateAuthority.requireMandate(ACTION_SET_THRESHOLD, noteId, proof);
         // A zero line is not a load line, it is the absence of one, and would let a note with
         // proven zero coverage settle. Refuse it rather than silently permitting everything.
         if (thresholdBps == 0 || thresholdBps > 1_000_000) revert ThresholdOutOfRange(thresholdBps);
+        mandateAuthority.requireMandate(ACTION_SET_THRESHOLD, noteId, thresholdBps, proof);
 
         Line storage line = _lines[noteId];
         emit ThresholdSet(noteId, line.configured ? line.thresholdBps : 0, thresholdBps);
@@ -143,13 +150,13 @@ contract LoadLine is ILoadLine, Owned {
     }
 
     function halt(bytes32 noteId, bytes calldata proof) external {
-        mandateAuthority.requireMandate(ACTION_HALT, noteId, proof);
+        mandateAuthority.requireMandate(ACTION_HALT, noteId, 0, proof);
         _lines[noteId].halted = true;
         emit Halted(noteId, msg.sender);
     }
 
     function resume(bytes32 noteId, bytes calldata proof) external {
-        mandateAuthority.requireMandate(ACTION_RESUME, noteId, proof);
+        mandateAuthority.requireMandate(ACTION_RESUME, noteId, 0, proof);
         _lines[noteId].halted = false;
         emit Resumed(noteId, msg.sender);
     }

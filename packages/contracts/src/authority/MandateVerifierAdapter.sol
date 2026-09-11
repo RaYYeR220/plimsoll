@@ -29,13 +29,13 @@ import { MandateVerifier } from "./MandateVerifier.sol";
  *      characters - is what makes that injection impossible, and {registerMarket} runs a code
  *      through the verifier's own validator before this contract will ever bind it to a note.
  *
- *      **Known limit, stated rather than hidden.** `requireMandate` authorises *that* an action
- *      happens on a subject; it does not see the value being written. For halt and resume there
- *      is no value, so the mapping is exact. For a threshold change the verifier records the
- *      mandated `loadLineBps` itself, and {mandatedThreshold} exposes it - so the honest way to
- *      read a note's load line is from the verifier, and a `LoadLine` threshold that disagrees
- *      with {mandatedThreshold} means somebody wrote a number the human did not approve.
- *      {assertThresholdMatchesMandate} is the check that catches it.
+ *      **The value is bound, not just the action.** A threshold mandate carries the load line
+ *      the human read on the device. {LoadLine} passes the number it is about to write, and this
+ *      adapter reverts with {MandateValueMismatch} unless the two are identical - before the
+ *      verifier consumes the mandate and before LoadLine writes anything. A mandate signed for
+ *      95.00% therefore cannot be spent writing 90.00%: the transaction fails, the nonce survives,
+ *      and the same mandate can still be used for the value it actually approved. Halt and resume
+ *      write no number, so their `value` is unused.
  */
 contract MandateVerifierAdapter is IMandateAuthority {
     /// @dev Must match the action constants LoadLine gates on.
@@ -54,6 +54,7 @@ contract MandateVerifierAdapter is IMandateAuthority {
     error MarketNotRegistered(bytes32 subject);
     error MarketAlreadyRegistered(bytes32 subject);
     error ThresholdNotMandated(bytes32 subject, uint64 written, uint32 mandated);
+    error MandateValueMismatch(bytes32 subject, uint256 written, uint32 mandated);
 
     event MarketRegistered(bytes32 indexed noteId, string market);
 
@@ -84,7 +85,7 @@ contract MandateVerifierAdapter is IMandateAuthority {
     }
 
     /// @inheritdoc IMandateAuthority
-    function requireMandate(bytes32 action, bytes32 subject, bytes calldata proof) external {
+    function requireMandate(bytes32 action, bytes32 subject, uint256 value, bytes calldata proof) external {
         (MandateVerifier.Mandate memory mandate, bytes memory signature) = abi.decode(
             proof,
             (MandateVerifier.Mandate, bytes)
@@ -99,6 +100,9 @@ contract MandateVerifierAdapter is IMandateAuthority {
         } else if (action == ACTION_RESUME) {
             verifier.resumeMarket(mandate, signature);
         } else if (action == ACTION_SET_THRESHOLD) {
+            // Checked before the verifier runs, so a mismatched write burns nothing and changes
+            // nothing: the human's approval is still there to be used for what it approved.
+            if (value != mandate.loadLineBps) revert MandateValueMismatch(subject, value, mandate.loadLineBps);
             verifier.setCoverageThreshold(mandate, signature);
         } else {
             // Deployment administration is owner-gated and never reaches here. The mandate format
@@ -130,9 +134,9 @@ contract MandateVerifierAdapter is IMandateAuthority {
 
     /**
      * @notice Reverts unless `written` is the threshold the device approved for `noteId`.
-     * @dev The reconciliation for the one thing {requireMandate} structurally cannot check.
-     *      Monitoring should call this after every threshold change; a revert means a number
-     *      reached the load line that no human signed for.
+     * @dev Not the safeguard - {requireMandate} already refuses a mismatched write up front. This
+     *      is a monitor for the one path that bypasses it: an owner who repoints LoadLine at a
+     *      different authority can write a line the device never saw, and this is how that shows.
      */
     function assertThresholdMatchesMandate(bytes32 noteId, uint64 written) external view {
         (uint32 mandated, bool listed) = mandatedThreshold(noteId);

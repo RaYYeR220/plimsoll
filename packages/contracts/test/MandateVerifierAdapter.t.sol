@@ -229,38 +229,51 @@ contract MandateVerifierAdapterTest is Test {
 
         // Deployment administration is owner-gated and must never resolve to a mandate action.
         vm.expectRevert(abi.encodeWithSelector(MandateVerifierAdapter.UnsupportedAction.selector, stray));
-        adapter.requireMandate(stray, noteId, proof);
+        adapter.requireMandate(stray, noteId, 0, proof);
     }
 
     // ------------------------------------------------------------------ reconciliation
 
     /**
-     * @notice The gap the interface cannot close, made visible instead of hidden.
-     * @dev `requireMandate` never sees the value being written, so a mandate approving "move the
-     *      line on PLIM-A" does not pin the line to a number. The verifier records what the human
-     *      actually approved, and this is the check that catches a divergence.
+     * @notice The human approves one number; another must not execute.
+     * @dev A valid SET-THRESHOLD mandate the device signed for 95.00% is submitted with 90.00% as
+     *      the value to write. It must revert - not succeed and be flagged afterwards - and it must
+     *      revert before the mandate is consumed, so nothing about the approval is lost.
      */
-    function test_ThresholdWrittenCanDivergeFromTheMandateAndIsDetectable() public {
-        bytes memory proof = _mandate(MandateVerifier.Action.SET_THRESHOLD, 13_000, 10_500);
-
-        // The caller consumes a mandate for 10,500 but writes 9,000 to the load line.
-        loadLine.setThreshold(noteId, 9_000, proof);
-        (uint64 written, ) = loadLine.lineOf(noteId);
-        assertEq(written, 9_000, "the load line took the caller's number");
-
-        (uint32 mandated, bool listed) = adapter.mandatedThreshold(noteId);
-        assertTrue(listed);
-        assertEq(mandated, 10_500, "but the human approved a different one");
+    function test_RevertWhen_ThresholdDiffersFromWhatTheHumanApproved() public {
+        bytes memory proof = _mandate(MandateVerifier.Action.SET_THRESHOLD, 13_000, 9_500);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                MandateVerifierAdapter.ThresholdNotMandated.selector,
+                MandateVerifierAdapter.MandateValueMismatch.selector,
                 noteId,
-                uint64(9_000),
-                uint32(10_500)
+                uint256(9_000),
+                uint32(9_500)
             )
         );
-        adapter.assertThresholdMatchesMandate(noteId, 9_000);
+        loadLine.setThreshold(noteId, 9_000, proof);
+
+        // Nothing was written on either side.
+        (, bool configured) = loadLine.lineOf(noteId);
+        assertFalse(configured, "the load line did not take the unapproved number");
+        (, bool listed) = adapter.mandatedThreshold(noteId);
+        assertFalse(listed, "the verifier did not consume the mandate");
+
+        // And the approval survives, usable for exactly what it approved.
+        loadLine.setThreshold(noteId, 9_500, proof);
+        (uint64 written, ) = loadLine.lineOf(noteId);
+        assertEq(written, 9_500);
+        adapter.assertThresholdMatchesMandate(noteId, 9_500);
+    }
+
+    function test_Fuzz_OnlyTheApprovedThresholdCanBeWritten(uint32 approved, uint64 attempted) public {
+        approved = uint32(bound(approved, 1, 99_999));
+        attempted = uint64(bound(attempted, 1, 1_000_000));
+        vm.assume(attempted != approved);
+
+        bytes memory proof = _mandate(MandateVerifier.Action.SET_THRESHOLD, 13_000, approved);
+        vm.expectRevert();
+        loadLine.setThreshold(noteId, attempted, proof);
     }
 
     function test_RevertWhen_ReadingAnUnregisteredMarket() public {

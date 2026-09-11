@@ -1,0 +1,154 @@
+{
+  "network": "Hedera Testnet (296)",
+  "device": {
+    "emulator": "Speculos, private BIP-39 seed",
+    "model": "nanosp",
+    "app": "app-ethereum 1.22.3",
+    "address": "0x69fC09FA24102a5C02B227072Bee5b71d7AeF3e2"
+  },
+  "verifier": "0xE7e95D63f903E36C7A34Ee2aDf9FC7dCfF49515A",
+  "loadLine": "0xF867B6F41b21e9d72f327F867aE898620D022C80",
+  "market": "PLIM-A",
+  "noteId": "0x376011be372685b3e6d566a7ba172f8b8968ac7a6d56d23e67046e2fd24d253c",
+  "steps": [
+    {
+      "label": "device approves SET-THRESHOLD at 95.00%",
+      "action": "SET-THRESHOLD",
+      "loadLineBps": 9500,
+      "coverageBps": 12000,
+      "nonce": 1,
+      "mandateText": "PLIMSOLL MANDATE v1\nACTION: SET-THRESHOLD\nMARKET: PLIM-A\nCOVERAGE: 120.00%\nLOAD LINE: 95.00%\nNONCE: 1\nEXPIRES: 2026-09-11T11:30:15Z\nCHAIN: 296\nVERIFIER: 0xe7e95d63f903e36c7a34ee2adf9fc7dcff49515a",
+      "decision": "APPROVED on device",
+      "signature": "0xfb3086c97bd124b83b7f9fd0feb04420c607d83e4a440d98e3ef39dd2cec3ed87bd6dd30e0ed5f2ccbec6446e61229bd44d80a8e66704433a87cc3053412fb541c",
+      "screens": [
+        "Review message",
+        "Message (1/4) PLIMSOLL MANDATE  v1 ACTION: SET- THRESHOLD ",
+        "Message (2/4) MARKET: PLIM-A  COVERAGE: 120.00%  LOAD LINE: 95.00% ",
+        "Message (3/4) NONCE: 1 EXPIRES:  2026-09-11T11:30:15Z  CHAIN: 296 VERIFIER: ",
+        "Message (4/4) 0xe7e95d63f903e36c7 a34ee2adf9fc7dcff49 515a",
+        "Sign message"
+      ]
+    },
+    {
+      "label": "same mandate submitted with 90.00% - must revert",
+      "call": "LoadLine.setThreshold",
+      "tx": "0x5daded84a201077440491157d92d1301c03db8405443f9a7d384f4e734f4f98c",
+      "hashscan": "https://hashscan.io/testnet/transaction/0x5daded84a201077440491157d92d1301c03db8405443f9a7d384f4e734f4f98c",
+      "status": "REVERTED",
+      "mirror": "CONTRACT_REVERT_EXECUTED",
+      "revertData": "0x20e11789376011be372685b3e6d566a7ba172f8b8968ac7a6d56d23e67046e2fd24d253c0000000000000000000000000000000000000000000000000000000000002328000000000000000000000000000000000000000000000000000000000000251c"
+    },
+    {
+      "label": "same mandate submitted with the 95.00% it approved",
+      "call": "LoadLine.setThreshold",
+      "tx": "0x5edc25a9b1a6163b481069809bb33aa31cd6ec65deca9ffa66b229e5604a1f19",
+      "hashscan": "https://hashscan.io/testnet/transaction/0x5edc25a9b1a6163b481069809bb33aa31cd6ec65deca9ffa66b229e5604a1f19",
+      "status": "SUCCESS",
+      "mirror": "SUCCESS",
+      "revertData": null
+    },
+    {
+      "label": "after threshold",
+      "halted": false,
+      "loadLineBps": 9500
+    },
+    {
+      "label": "device approves HALT",
+      "action": "HALT",
+      "loadLineBps": 9500,
+      "coverageBps": 9100,
+      "nonce": 2,
+      "mandateText": "PLIMSOLL MANDATE v1\nACTION: HALT\nMARKET: PLIM-A\nCOVERAGE: 91.00%\nLOAD LINE: 95.00%\nNONCE: 2\nEXPIRES: 2026-09-11T11:30:15Z\nCHAIN: 296\nVERIFIER: 0xe7e95d63f903e36c7a34ee2adf9fc7dcff49515a",
+      "decision": "APPROVED on device",
+      "signature": "0x12a5c8d11e9ee7c82268a8c6243e2de3382f6733e4c0b438a16204a74d7d5f4e4e7cd26d994fb637cfbe99a578a2de9dc8351d7fefeae189dc356bb8e4b660361c",
+      "screens": [
+        "Review message",
+        "Message (1/4) PLIMSOLL MANDATE  v1 ACTION: HALT  MARKET: PLIM-A ",
+        "Message (2/4) COVERAGE: 91.00%  LOAD LINE: 95.00%  NONCE: 2 EXPIRES: ",
+        "Message (3/4) 2026-09-11T11:30:15Z  CHAIN: 296 VERIFIER:  0xe7e95d63f903e36c7",
+        "Message (4/4) a34ee2adf9fc7dcff49 515a",
+        "Sign message"
+      ]
+    },
+    {
+      "label": "device-approved HALT accepted",
+      "call": "LoadLine.halt",
+      "tx": "0xe14eb03715dba824a06de55bc0aea6753e790f6f6073f21ac8ff06bc492bbee3",
+      "hashscan": "https://hashscan.io/testnet/transaction/0xe14eb03715dba824a06de55bc0aea6753e790f6f6073f21ac8ff06bc492bbee3",
+      "status": "SUCCESS",
+      "mirror": "SUCCESS",
+      "revertData": null
+    },
+    {
+      "label": "after halt",
+      "halted": true,
+      "loadLineBps": 9500
+    },
+    {
+      "label": "device REJECTS RESUME",
+      "action": "RESUME",
+      "loadLineBps": 9500,
+      "coverageBps": 9800,
+      "nonce": 3,
+      "mandateText": "PLIMSOLL MANDATE v1\nACTION: RESUME\nMARKET: PLIM-A\nCOVERAGE: 98.00%\nLOAD LINE: 95.00%\nNONCE: 3\nEXPIRES: 2026-09-11T11:30:15Z\nCHAIN: 296\nVERIFIER: 0xe7e95d63f903e36c7a34ee2adf9fc7dcff49515a",
+      "decision": "NO SIGNATURE (refused)",
+      "detail": "_tag=EthAppCommandError errorCode=6985 message=Condition not satisfied",
+      "signature": null,
+      "screens": [
+        "Review message",
+        "Message (1/4) PLIMSOLL MANDATE  v1 ACTION: RESUME  MARKET: PLIM-A ",
+        "Message (2/4) COVERAGE: 98.00%  LOAD LINE: 95.00%  NONCE: 3 EXPIRES: ",
+        "Message (3/4) 2026-09-11T11:30:15Z  CHAIN: 296 VERIFIER:  0xe7e95d63f903e36c7",
+        "Message (4/4) a34ee2adf9fc7dcff49 515a",
+        "Sign message",
+        "Reject message"
+      ]
+    },
+    {
+      "label": "RESUME signed by a non-device key - must revert",
+      "call": "LoadLine.resume",
+      "tx": "0x764611a2e0c8f848202595d31177085d0bd9e618715b8f0aea6cc71cf9cd088c",
+      "hashscan": "https://hashscan.io/testnet/transaction/0x764611a2e0c8f848202595d31177085d0bd9e618715b8f0aea6cc71cf9cd088c",
+      "status": "REVERTED",
+      "mirror": "CONTRACT_REVERT_EXECUTED",
+      "revertData": "0x5f7e60e80000000000000000000000009ea648347167a0acaf4267608e3de7e11bc90a8900000000000000000000000069fc09fa24102a5c02b227072bee5b71d7aef3e2"
+    },
+    {
+      "label": "after rejected resume",
+      "halted": true,
+      "loadLineBps": 9500
+    },
+    {
+      "label": "device approves RESUME",
+      "action": "RESUME",
+      "loadLineBps": 9500,
+      "coverageBps": 9800,
+      "nonce": 4,
+      "mandateText": "PLIMSOLL MANDATE v1\nACTION: RESUME\nMARKET: PLIM-A\nCOVERAGE: 98.00%\nLOAD LINE: 95.00%\nNONCE: 4\nEXPIRES: 2026-09-11T11:30:15Z\nCHAIN: 296\nVERIFIER: 0xe7e95d63f903e36c7a34ee2adf9fc7dcff49515a",
+      "decision": "APPROVED on device",
+      "signature": "0xfb87b1bf0fde985711ee87d1a26a1eb2d360b56b7557d77417f71979907903b4412bdbc2ad580b4331ad92113ffc2580eecc1938734103b6bbb6827e97b9c8101c",
+      "screens": [
+        "Review message",
+        "Message (1/4) PLIMSOLL MANDATE  v1 ACTION: RESUME  MARKET: PLIM-A ",
+        "Message (2/4) COVERAGE: 98.00%  LOAD LINE: 95.00%  NONCE: 4 EXPIRES: ",
+        "Message (3/4) 2026-09-11T11:30:15Z  CHAIN: 296 VERIFIER:  0xe7e95d63f903e36c7",
+        "Message (4/4) a34ee2adf9fc7dcff49 515a",
+        "Sign message"
+      ]
+    },
+    {
+      "label": "device-approved RESUME accepted",
+      "call": "LoadLine.resume",
+      "tx": "0x29465ed228b7d7173dc91a0e07b146a1ca8c3203d6a8f5d5323dc071f33843bc",
+      "hashscan": "https://hashscan.io/testnet/transaction/0x29465ed228b7d7173dc91a0e07b146a1ca8c3203d6a8f5d5323dc071f33843bc",
+      "status": "SUCCESS",
+      "mirror": "SUCCESS",
+      "revertData": null
+    },
+    {
+      "label": "after approved resume",
+      "halted": false,
+      "loadLineBps": 9500
+    }
+  ]
+}
