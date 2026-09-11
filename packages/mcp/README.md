@@ -7,7 +7,8 @@ An MCP server that gives agents **live ERC-4626 vault evidence** from The Graph:
 - whether a Plimsoll note is covered by its issuer's vault positions.
 
 The data is streamed continuously from **The Graph Market** through the
-`plimsoll_erc4626` Substreams package in `packages/substreams`. The Graph is
+`plimsoll_erc4626` Substreams package in `packages/substreams`, published at
+<https://substreams.dev/packages/plimsoll-erc4626>. The Graph is
 the only source of vault data here. The note registry chain (Hedera) is read
 only for a note's liabilities and identity.
 
@@ -38,7 +39,9 @@ SUBSTREAMS_API_TOKEN=<The Graph Market JWT> npm run serve      # http://localhos
 
 It needs `packages/attestor` built (`npm run build` there), because the
 coverage arithmetic is imported from it. It also needs
-`packages/substreams/plimsoll-erc4626-v0.2.0.spkg`.
+`packages/substreams/plimsoll-erc4626-v0.2.0.spkg`. That multi-network build
+is the one with `map_positions`, and it is not on the registry yet; the
+published mainnet line does not carry positions.
 
 - MCP (Streamable HTTP): `http://localhost:4030/mcp`. POST for requests, GET for the server stream, DELETE to end a session.
 - A2A card: `http://localhost:4030/.well-known/agent-card.json`. JSON-RPC at `/a2a/v1`.
@@ -288,13 +291,23 @@ test is skipped unless a token is present.
   by that cadence plus finality lag, which is why Base runs final-only.
 - **Coverage assumes USD par and USD-pegged underlyings.** A non-USD note
   currency, or an underlying not priced at peg, refuses `vault_unresolved`.
+- **Basis points cannot tell a tiny position from none.** Coverage is carried
+  on-chain as `coverageBps`, so anything below 0.005% floors to `0`. PLIM-A's
+  roughly $15 against a $1,000,000 obligation is 0.15 bps, which reports the
+  same `0` as an empty position. The distinction survives in the reason code
+  (`coverage_below_floor` against `no_attributable_positions`) and in the
+  detail, which carries `obligation` and `attributable` in full. So a refusal
+  here never quotes basis points alone. The on-chain verdict is right either
+  way, since both cases sit far below any load line, but a display that shows
+  only bps would make the negative control and an empty wallet look identical.
 - **The note vault lists are not final yet.** `notes.json` carries PLIM-A (the
   negative control, a $1,000,000 obligation that must always refuse) and PLIM-B
   (about $10 against roughly $15 of Base backing, the one that should clear),
-  both with an empty vault list. Their registered `vaultSetHash` is currently
-  `0x2627c1d5…`, which is sha256("plimsoll/vaults/v1"), a bootstrap placeholder
-  rather than any vault list. So both notes refuse `vault_set_drift` until
-  `setVaultSet` commits the real lists. That is the intended behaviour, and it
+  both with an empty vault list. Each is registered with a placeholder
+  `vaultSetHash`, and the two use different conventions: PLIM-A's `0x2627c1d5…`
+  is sha256("plimsoll/vaults/v1"), while PLIM-B's `0x504c…` is the ASCII string
+  `PLACEHOLDER-NOT-A-VAULT-SET`. Neither is the hash of a vault list, so both
+  notes refuse `vault_set_drift` until `setVaultSet` commits the real lists. That is the intended behaviour, and it
   is what the live transcript below shows.
 - **Defence in depth against the package.** The package's `rates_consistent`
   flag had a division-by-zero hole: a vault reporting `totalAssets = 0` against

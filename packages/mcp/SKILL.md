@@ -7,7 +7,10 @@ description: Live ERC-4626 vault evidence from The Graph Market (Substreams). Us
 
 An MCP server (Streamable HTTP, `POST/GET/DELETE /mcp`) with an A2A card at
 `/.well-known/agent-card.json`. Its data comes from the `plimsoll_erc4626`
-Substreams package, streamed live from The Graph Market.
+Substreams package, streamed live from The Graph Market. That package is
+published at <https://substreams.dev/packages/plimsoll-erc4626>; the mainnet
+line is on the registry, and the multi-network build this server reads by
+default lives in the repository until it is released.
 
 ## When to use it
 

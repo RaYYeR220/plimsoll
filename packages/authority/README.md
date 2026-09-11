@@ -242,7 +242,7 @@ On chain, `MandateVerifier` re-derives the same string and enforces the authorit
 single-use nonce, the expiry, `block.chainid` and `address(this)`, and reverts with named errors —
 `InvalidAttestation`, `MandateExpired`, `NonceUsed`, `WrongAuthority`, `WrongAction`,
 `BadMarketCode`, `UnknownMarket`, `LoadLineMoved`, `CoverageBelowLine`, `MarketAlreadyHalted`,
-`MarketNotHalted`, `ValueOutOfRange`, `NoAuthority`. It is 6,873 bytes of runtime code, 17,703
+`MarketNotHalted`, `ValueOutOfRange`, `NoAuthority`. It is 6,892 bytes of runtime code, 17,684
 under the EIP-170 limit Hedera enforces.
 
 ## Honest limits

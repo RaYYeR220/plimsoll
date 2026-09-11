@@ -284,8 +284,18 @@ sets.
 
 | Version | Manifest | Scope |
 |---|---|---|
-| v0.1.1 | `substreams.v0.1.1.yaml` | Ethereum mainnet: registry, series, Messari view |
-| v0.2.0 | `substreams.yaml` | adds Base and the positions modules (`store_asset_prices`, `map_positions`) |
+| v0.1.2 | `mainnet/substreams.yaml` | Ethereum mainnet: registry, series, Messari view. Embeds [`mainnet/README.md`](mainnet/README.md). |
+| v0.1.1 | — | the same modules, published, but it embedded this repository README, which describes Base and positions that the mainnet package does not contain. v0.1.2 supersedes it. |
+| v0.2.0 | `substreams.yaml` | adds Base and the positions modules (`store_asset_prices`, `map_positions`). Not published yet. |
+
+A registry version cannot be replaced, only superseded, which is why the
+documentation fix is a new patch version rather than a re-upload. The packages
+are at <https://substreams.dev/packages/plimsoll-erc4626>.
+
+**An embedded document may only describe what its own package contains.** The
+CLI embeds the `README.md` sitting beside the manifest and ignores
+`package.doc`, so the mainnet package lives in `mainnet/` with its own adjacent
+README, and this file stays the repository-wide document.
 
 v0.1.1 supersedes v0.1.0, which was built but never published. v0.1.0 had a
 hole in `rates_consistent`: a vault reporting `totalAssets = 0` has no
@@ -325,8 +335,15 @@ substreams run substreams.yaml map_vault_blocks -e mainnet.eth.streamingfast.io:
   -s 25940000 -t +1000 -p map_flows=0x9d39a5de30e57443bff2a8307a4256c8797a3497
 ```
 
-Or run the published package directly without building:
-`substreams run <registry-url> map_vault_blocks ...`
+Or take the published package and skip the build entirely:
+
+```bash
+substreams gui plimsoll-erc4626@v0.1.1
+substreams run plimsoll-erc4626@v0.1.1 map_vault_blocks   -e mainnet.eth.streamingfast.io:443 -s 25940000 -t +300 -o jsonl
+```
+
+It is published at
+<https://substreams.dev/packages/plimsoll-erc4626/v0.1.1>.
 
 ### Environment
 
