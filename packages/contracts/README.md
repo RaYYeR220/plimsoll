@@ -25,8 +25,8 @@ no marketplace, no DEX, no swap anywhere in its 544 Solidity files. That gap is 
 | `BerthMarket` | An order book over ATS notes. Escrows with ATS holds, pre-flights both legs, consults the load line on every path. |
 | `CouponScheduler` | Coupons that fire from the ledger's own scheduler (HIP-1215), re-arm themselves, and terminate at maturity. |
 | `CashLegController` | Creates the HTS cash token and holds its freeze key, so a breach stops payment at consensus. |
-| `MandateVerifier` | Recovers an EIP-191 mandate a person approved on a hardware device. |
-| `MandateVerifierAdapter` | Carries that decision into `LoadLine` through a minimal `IMandateAuthority`. |
+| `MandateVerifier` | Recovers an EIP-191 mandate a person approved on a hardware device, and executes it only for the adapter that created it. |
+| `MandateVerifierAdapter` | Carries that decision into `LoadLine` through a minimal `IMandateAuthority`, and only when `LoadLine` is the caller. |
 
 ### The idea worth arguing about
 
@@ -162,12 +162,12 @@ Stated plainly rather than faked:
 ## Deployed on Hedera testnet (chain 296)
 
 All seven verified on Sourcify, `exact_match`. Full record with every transaction hash:
-[`deployments/hedera-testnet.json`](deployments/hedera-testnet.json). The first stack, deployed 2026-09-10 against a software mandate key, is kept there under `superseded` rather than deleted; `CoverageOracle` carried over and was rewired, so the registered note and its attestor are unchanged.
+[`deployments/hedera-testnet.json`](deployments/hedera-testnet.json). Two earlier generations are kept there under `superseded` rather than deleted: the first stack, which trusted a software mandate key, and the unlocked verifier and adapter that followed it. `LoadLine`, `CashLegController`, the cash token and the venue carried over through the second change; `CoverageOracle` has carried over since the first.
 
 | Contract | EVM address | Hedera |
 |---|---|---|
-| `MandateVerifier` | `0xe7e95d63f903e36c7a34ee2adf9fc7dcff49515a` | `0.0.10474281` |
-| `MandateVerifierAdapter` | `0xb8a94643111ba230459f1d7ecf3bdbc348b83e63` | `0.0.10474283` |
+| `MandateVerifier` | `0x835408327a72307e79826aa3A9b038c6d73429c1` | `0.0.10477161` |
+| `MandateVerifierAdapter` | `0xda71f48eb26579a94aaef03a87f0866d089e6d48` | `0.0.10477160` |
 | `CoverageOracle` | `0xCE13De224ed918D7b8B2717492849e0A82648ca3` | `0.0.10451752` |
 | `LoadLine` | `0xf867b6f41b21e9d72f327f867ae898620d022c80` | `0.0.10474285` |
 | `CashLegController` | `0xccedcc53902b925c72e3c45d4cc176806326b30b` | `0.0.10474287` |
@@ -216,33 +216,40 @@ it books anything — the whole point being that a compliant venue never *reache
 
 ### The device path, live on-chain
 
-`MandateVerifier` `0xe7e95d63f903e36c7a34ee2adf9fc7dcff49515a` trusts exactly one key, `0x69fC09FA24102a5C02B227072Bee5b71d7AeF3e2` — a Ledger Nano S Plus emulated by Speculos (app-ethereum 1.22.3) and seeded with a freshly generated **private** mnemonic that lives outside this repository. It is deliberately not the public Speculos test seed, whose address anyone can sign for. Every mandate below was rendered on the device screen, decided there, and then submitted to `LoadLine`:
+`MandateVerifier` `0x835408327a72307e79826aa3A9b038c6d73429c1` trusts exactly one key, `0x69fC09FA24102a5C02B227072Bee5b71d7AeF3e2` — a Ledger Nano S Plus emulated by Speculos (app-ethereum 1.22.3) and seeded with a freshly generated **private** mnemonic that lives outside this repository. It is deliberately not the public Speculos test seed, whose address anyone can sign for.
+
+**There is one door.** `LoadLine` → `MandateVerifierAdapter` → `MandateVerifier`, and each hop accepts calls only from the one before it: the verifier's `gatekeeper` is the adapter (`0xdA71f48eb26579A94AaEF03A87F0866D089E6D48`), and the adapter's `loadLine` is `0xF867B6F41b21e9d72f327F867aE898620D022C80`. The adapter deploys the verifier in its own constructor and the verifier records `msg.sender` as its sole caller, so there was never a moment — and never a setter — in which either answered to anyone else. Every mandate below was rendered on the device screen, decided there, and then submitted:
 
 | Where | What | Result |
 |---|---|---|
 | device | `SET-THRESHOLD` at line 95.00%, coverage 120.00% | approved |
-| chain | same mandate submitted with 90.00% - must revert | REVERTED `0x20e11789` — [`0x5daded84…`](https://hashscan.io/testnet/transaction/0x5daded84a201077440491157d92d1301c03db8405443f9a7d384f4e734f4f98c) |
-| chain | same mandate submitted with the 95.00% it approved | SUCCESS — [`0x5edc25a9…`](https://hashscan.io/testnet/transaction/0x5edc25a9b1a6163b481069809bb33aa31cd6ec65deca9ffa66b229e5604a1f19) |
-| state | after threshold | halted **false**, line 95.00% |
+| chain | same mandate through LoadLine with 90.00% - must revert | REVERTED `0x20e11789` — [`0x1146556a…`](https://hashscan.io/testnet/transaction/0x1146556a955e1a199477d6e2b6a469b5287a50bda2c9346195b2345afb1872a2) |
+| chain | same mandate through LoadLine with the 95.00% it approved | SUCCESS — [`0x55a11367…`](https://hashscan.io/testnet/transaction/0x55a11367f4526de5b656a8fb86f79b2903d2d6d85b36d1920ab7a67d9c0da6c2) |
+| state | after threshold | halted **false** (verifier agrees: true), line 95.00% |
 | device | `HALT` at line 95.00%, coverage 91.00% | approved |
-| chain | device-approved HALT accepted | SUCCESS — [`0xe14eb037…`](https://hashscan.io/testnet/transaction/0xe14eb03715dba824a06de55bc0aea6753e790f6f6073f21ac8ff06bc492bbee3) |
-| state | after halt | halted **true**, line 95.00% |
+| chain | valid HALT straight to the verifier - wrong door, must revert | REVERTED `0xa29963d7` — [`0x96de631c…`](https://hashscan.io/testnet/transaction/0x96de631c3a8f8b93a479df103dfc5bc1c47454b305730d2b7ae6c342d0644b32) |
+| chain | valid HALT straight to the adapter - wrong door, must revert | REVERTED `0x59d2759c` — [`0x61625e13…`](https://hashscan.io/testnet/transaction/0x61625e137f227d9748d63ebc815a608838443342be00aab0219f23cb02a9e96d) |
+| state | after both wrong doors - approval unspent | halted **false** (verifier agrees: true), line 95.00%, nonce spent **false** |
+| chain | the same HALT through LoadLine - accepted | SUCCESS — [`0x559bd71f…`](https://hashscan.io/testnet/transaction/0x559bd71fee818041a9ce30285e1a7e3588b6ffb14b6ed8067fbaf91aaf07781f) |
+| state | after halt | halted **true** (verifier agrees: true), line 95.00%, nonce spent **true** |
 | device | `RESUME` at line 95.00%, coverage 98.00% | **rejected** — `6985`, no signature exists |
-| chain | RESUME signed by a non-device key - must revert | REVERTED `0x5f7e60e8` — [`0x764611a2…`](https://hashscan.io/testnet/transaction/0x764611a2e0c8f848202595d31177085d0bd9e618715b8f0aea6cc71cf9cd088c) |
-| state | after rejected resume | halted **true**, line 95.00% |
+| chain | RESUME signed by a non-device key - must revert | REVERTED `0x5f7e60e8` — [`0xa9fd42a2…`](https://hashscan.io/testnet/transaction/0xa9fd42a2e061efded9d2fb80378f58ae748b9d4a34bf28a74932b9a0d5c6f5f2) |
+| state | after rejected resume | halted **true** (verifier agrees: true), line 95.00% |
 | device | `RESUME` at line 95.00%, coverage 98.00% | approved |
-| chain | device-approved RESUME accepted | SUCCESS — [`0x29465ed2…`](https://hashscan.io/testnet/transaction/0x29465ed228b7d7173dc91a0e07b146a1ca8c3203d6a8f5d5323dc071f33843bc) |
-| state | after approved resume | halted **false**, line 95.00% |
+| chain | device-approved RESUME through LoadLine - accepted | SUCCESS — [`0xc77864c9…`](https://hashscan.io/testnet/transaction/0xc77864c93ff5dfab65b93881f26785979a3c9a85713e01f41b72ad73182a7d8c) |
+| state | after approved resume | halted **false** (verifier agrees: true), line 95.00% |
 
-Two refusals worth reading. A mandate the device signed for **95.00%** was first submitted with **90.00%** as the value to write, and reverted with `MandateValueMismatch` before the verifier consumed it — the same approval then succeeded for the 95.00% it named. And after the device rejected a `RESUME` there was no signature to submit at all; a resume signed by any other key reverts with `WrongAuthority`, so the market stayed halted until a human approved it.
+**A valid human approval, applied through the wrong door, is refused.** The `HALT` the device signed was sent straight to the verifier and reverted with `NotGatekeeper`, then straight to the adapter and reverted with `NotLoadLine` — and neither attempt spent its nonce, so the very same approval then halted the market through `LoadLine`, with `LoadLine` and the verifier agreeing. ([`0x96de631c…`](https://hashscan.io/testnet/transaction/0x96de631c3a8f8b93a479df103dfc5bc1c47454b305730d2b7ae6c342d0644b32), [`0x61625e13…`](https://hashscan.io/testnet/transaction/0x61625e137f227d9748d63ebc815a608838443342be00aab0219f23cb02a9e96d).) Before this lock, either door would have burned the nonce without `LoadLine` moving: the human halts, the market keeps trading.
 
-Full transcript and every signature: [`deployments/device-proof.json`](deployments/device-proof.json). Its `screens` field is the text the device actually rendered, page by page - `LOAD LINE: 95.00%` included - read back from the emulator rather than reconstructed. The PNGs in [`deployments/device/`](deployments/device/) only capture the first page of each review, which reads "Review message" for every mandate; the transcripts are the evidence of what was shown.
+The other refusals: a mandate signed for **95.00%** submitted with **90.00%** reverts with `MandateValueMismatch` before anything is consumed, and the same approval then succeeds for the value it named. After the device rejected a `RESUME` there was no signature to submit at all; a resume signed by any other key reverts with `WrongAuthority`, so the market stayed halted until a human approved it.
+
+Full transcript and every signature: [`deployments/device-proof.json`](deployments/device-proof.json). Its `screens` field is the text the device actually rendered, page by page, read back from the emulator rather than reconstructed. The PNGs in [`deployments/device/`](deployments/device/) only capture the first page of each review, which reads "Review message" for every mandate; the transcripts are the evidence of what was shown.
 
 ---
 
 ## Tests
 
-**194 passing, 0 failing, 10 suites.** `forge test`
+**199 passing, 0 failing, 10 suites.** `forge test`
 
 | Suite | Tests | Covers |
 |---|---|---|
@@ -251,7 +258,7 @@ Full transcript and every signature: [`deployments/device-proof.json`](deploymen
 | `CouponScheduler.t.sol` | 30 | Arming, withholding, hopping, termination, runaway caps, rejected reschedules |
 | `MandateVerifier.t.sol` | 26 | The device mandate, against a signature a real Ledger produced |
 | `LoadLine.t.sol` | 24 | Refusal ordering, mandate gating, owner gating, fail-closed wiring |
-| `MandateVerifierAdapter.t.sol` | 16 | Action mapping, market-code charset, the written value bound to the mandate |
+| `MandateVerifierAdapter.t.sol` | 21 | Action mapping, market-code charset, value binding, both wrong doors refused |
 | `CashLeg.t.sol` | 13 | Token creation, response codes, the circuit breaker, consensus-level enforcement |
 | `Invariant.t.sol` | 6 | The product invariant, plus proof the rig is not inert |
 | `EndToEnd.t.sol` | 2 | Issue → place → match → settle → coupon, and the same note failing the line |
@@ -287,10 +294,10 @@ Asserted in `Bytecode.t.sol`, which fails the build rather than the deploy. Hede
 |---|---|---|
 | `BerthMarket` | 8,697 | 15,879 |
 | `CouponScheduler` | 8,195 | 16,381 |
-| `MandateVerifier` | 6,767 | 17,809 |
+| `MandateVerifier` | 6,892 | 17,684 |
 | `CoverageOracle` | 6,375 | 18,201 |
 | `CashLegController` | 5,455 | 19,121 |
-| `MandateVerifierAdapter` | 3,970 | 20,606 |
+| `MandateVerifierAdapter` | 4,095 | 20,481 |
 | `LoadLine` | 3,642 | 20,934 |
 
 Largest is 35% of the limit. Logic lives in libraries (`Coverage`, `Preflight`, `Ecdsa`,
@@ -302,7 +309,7 @@ Largest is 35% of the limit. Logic lives in libraries (`Coverage`, `Preflight`, 
 
 ```bash
 forge build
-forge test                       # 194 tests
+forge test                       # 199 tests
 forge test --profile ci          # 4096 fuzz runs, 512 invariant runs
 forge build --sizes              # EIP-170 margins
 python deployments/verify-ids.py # every deployed id, checked against the mirror node
@@ -391,11 +398,15 @@ consistency (`MandateVerifier` refuses a resume whose own numbers are under the 
 does not compare it to the oracle. A resume approved on a stale figure lifts the halt, and trading
 then still requires the oracle to read clear, so it cannot open settlement on its own.
 
-**`MandateVerifier`'s entrypoints are public.** Someone who obtains a signed mandate before it lands
-could apply it to the verifier directly, leaving `LoadLine` out of step with it until the owner
-repoints the authority. Hedera has no public mempool, which makes that interception impractical
-rather than impossible. The complete fix is for `LoadLine` to read halt state from the verifier
-instead of keeping its own copy.
+**Fixed rather than disclosed: only `LoadLine` can spend a mandate.** An earlier deployment let a
+signed mandate be submitted straight to the verifier or straight to the adapter, burning its nonce
+while `LoadLine`'s own halt state stayed put — for a halt, that fails open. Both hops are now locked
+to the one before them, set at construction with no setter to race. It is proved three ways: unit
+tests that a correctly signed mandate reverts at each wrong door and then succeeds through
+`LoadLine`; `test_Fuzz_NoCallerButLoadLineCanMoveHaltOrThreshold`, which gives an arbitrary caller a
+valid halt or threshold mandate and requires both doors to refuse it with no nonce spent and the two
+states still in agreement; and the live on-chain sequence above. What remains is the owner: it can
+still repoint `LoadLine` at a different authority, as stated below.
 
 **"How old is this data" is answered in wall-clock seconds, not source-chain blocks.** There is no
 light client for the source chain, so we cannot know its true head. `asOfBlock` is still load-bearing
@@ -458,7 +469,7 @@ packages/contracts/
 │   │   └── MandateVerifierAdapter.sol  IMandateAuthority over the verifier
 │   ├── interfaces/                 IAts, IHederaTokenService, IHederaScheduleService, …
 │   └── libraries/                  Coverage, Preflight, Ecdsa, HederaResponse
-├── test/                           194 tests, 10 suites
+├── test/                           199 tests, 10 suites
 ├── script/                         Deploy, Redeploy, IssueNote
 ├── deployments/                    on-chain record, live device proof, mirror-node verifier
 └── lib/forge-std/                  vendored

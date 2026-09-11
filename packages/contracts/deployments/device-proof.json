@@ -6,8 +6,16 @@
     "app": "app-ethereum 1.22.3",
     "address": "0x69fC09FA24102a5C02B227072Bee5b71d7AeF3e2"
   },
-  "verifier": "0xE7e95D63f903E36C7A34Ee2aDf9FC7dCfF49515A",
+  "verifier": "0x835408327a72307e79826aa3A9b038c6d73429c1",
+  "adapter": "0xdA71f48eb26579A94AaEF03A87F0866D089E6D48",
   "loadLine": "0xF867B6F41b21e9d72f327F867aE898620D022C80",
+  "wiring": {
+    "loadLineAuthority": "0xdA71f48eb26579A94AaEF03A87F0866D089E6D48",
+    "adapterLoadLine": "0xF867B6F41b21e9d72f327F867aE898620D022C80",
+    "adapterVerifier": "0x835408327a72307e79826aa3A9b038c6d73429c1",
+    "verifierGatekeeper": "0xdA71f48eb26579A94AaEF03A87F0866D089E6D48",
+    "verifierAuthority": "0x69fC09FA24102a5C02B227072Bee5b71d7AeF3e2"
+  },
   "market": "PLIM-A",
   "noteId": "0x376011be372685b3e6d566a7ba172f8b8968ac7a6d56d23e67046e2fd24d253c",
   "steps": [
@@ -17,32 +25,34 @@
       "loadLineBps": 9500,
       "coverageBps": 12000,
       "nonce": 1,
-      "mandateText": "PLIMSOLL MANDATE v1\nACTION: SET-THRESHOLD\nMARKET: PLIM-A\nCOVERAGE: 120.00%\nLOAD LINE: 95.00%\nNONCE: 1\nEXPIRES: 2026-09-11T11:30:15Z\nCHAIN: 296\nVERIFIER: 0xe7e95d63f903e36c7a34ee2adf9fc7dcff49515a",
+      "mandateText": "PLIMSOLL MANDATE v1\nACTION: SET-THRESHOLD\nMARKET: PLIM-A\nCOVERAGE: 120.00%\nLOAD LINE: 95.00%\nNONCE: 1\nEXPIRES: 2026-09-11T15:27:49Z\nCHAIN: 296\nVERIFIER: 0x835408327a72307e79826aa3a9b038c6d73429c1",
       "decision": "APPROVED on device",
-      "signature": "0xfb3086c97bd124b83b7f9fd0feb04420c607d83e4a440d98e3ef39dd2cec3ed87bd6dd30e0ed5f2ccbec6446e61229bd44d80a8e66704433a87cc3053412fb541c",
+      "signature": "0x5317b6790a023f94ecde35c84318a096828f779081c913d63d8cfc73f1e9054f499fb15194a25d115ae6ecce0aed2cc51a2c202108c1ee8ccdba6449954029c81c",
       "screens": [
         "Review message",
         "Message (1/4) PLIMSOLL MANDATE  v1 ACTION: SET- THRESHOLD ",
         "Message (2/4) MARKET: PLIM-A  COVERAGE: 120.00%  LOAD LINE: 95.00% ",
-        "Message (3/4) NONCE: 1 EXPIRES:  2026-09-11T11:30:15Z  CHAIN: 296 VERIFIER: ",
-        "Message (4/4) 0xe7e95d63f903e36c7 a34ee2adf9fc7dcff49 515a",
+        "Message (3/4) NONCE: 1 EXPIRES:  2026-09-11T15:27:49Z  CHAIN: 296 VERIFIER: ",
+        "Message (4/4) 0x835408327a72307e 79826aa3a9b038c6d7 3429c1",
         "Sign message"
       ]
     },
     {
-      "label": "same mandate submitted with 90.00% - must revert",
+      "label": "same mandate through LoadLine with 90.00% - must revert",
       "call": "LoadLine.setThreshold",
-      "tx": "0x5daded84a201077440491157d92d1301c03db8405443f9a7d384f4e734f4f98c",
-      "hashscan": "https://hashscan.io/testnet/transaction/0x5daded84a201077440491157d92d1301c03db8405443f9a7d384f4e734f4f98c",
+      "to": "0xF867B6F41b21e9d72f327F867aE898620D022C80",
+      "tx": "0x1146556a955e1a199477d6e2b6a469b5287a50bda2c9346195b2345afb1872a2",
+      "hashscan": "https://hashscan.io/testnet/transaction/0x1146556a955e1a199477d6e2b6a469b5287a50bda2c9346195b2345afb1872a2",
       "status": "REVERTED",
       "mirror": "CONTRACT_REVERT_EXECUTED",
       "revertData": "0x20e11789376011be372685b3e6d566a7ba172f8b8968ac7a6d56d23e67046e2fd24d253c0000000000000000000000000000000000000000000000000000000000002328000000000000000000000000000000000000000000000000000000000000251c"
     },
     {
-      "label": "same mandate submitted with the 95.00% it approved",
+      "label": "same mandate through LoadLine with the 95.00% it approved",
       "call": "LoadLine.setThreshold",
-      "tx": "0x5edc25a9b1a6163b481069809bb33aa31cd6ec65deca9ffa66b229e5604a1f19",
-      "hashscan": "https://hashscan.io/testnet/transaction/0x5edc25a9b1a6163b481069809bb33aa31cd6ec65deca9ffa66b229e5604a1f19",
+      "to": "0xF867B6F41b21e9d72f327F867aE898620D022C80",
+      "tx": "0x55a11367f4526de5b656a8fb86f79b2903d2d6d85b36d1920ab7a67d9c0da6c2",
+      "hashscan": "https://hashscan.io/testnet/transaction/0x55a11367f4526de5b656a8fb86f79b2903d2d6d85b36d1920ab7a67d9c0da6c2",
       "status": "SUCCESS",
       "mirror": "SUCCESS",
       "revertData": null
@@ -50,6 +60,7 @@
     {
       "label": "after threshold",
       "halted": false,
+      "verifierHalted": false,
       "loadLineBps": 9500
     },
     {
@@ -58,23 +69,51 @@
       "loadLineBps": 9500,
       "coverageBps": 9100,
       "nonce": 2,
-      "mandateText": "PLIMSOLL MANDATE v1\nACTION: HALT\nMARKET: PLIM-A\nCOVERAGE: 91.00%\nLOAD LINE: 95.00%\nNONCE: 2\nEXPIRES: 2026-09-11T11:30:15Z\nCHAIN: 296\nVERIFIER: 0xe7e95d63f903e36c7a34ee2adf9fc7dcff49515a",
+      "mandateText": "PLIMSOLL MANDATE v1\nACTION: HALT\nMARKET: PLIM-A\nCOVERAGE: 91.00%\nLOAD LINE: 95.00%\nNONCE: 2\nEXPIRES: 2026-09-11T15:27:49Z\nCHAIN: 296\nVERIFIER: 0x835408327a72307e79826aa3a9b038c6d73429c1",
       "decision": "APPROVED on device",
-      "signature": "0x12a5c8d11e9ee7c82268a8c6243e2de3382f6733e4c0b438a16204a74d7d5f4e4e7cd26d994fb637cfbe99a578a2de9dc8351d7fefeae189dc356bb8e4b660361c",
+      "signature": "0x7d8e24590ee8cf0795411740a1615a1a87a8ddf2aa0522a287f08b44ec24a3780350c7ead0400326ba02fefd4d8125d784b09df9973c8418ce0d990832e85f101b",
       "screens": [
         "Review message",
         "Message (1/4) PLIMSOLL MANDATE  v1 ACTION: HALT  MARKET: PLIM-A ",
         "Message (2/4) COVERAGE: 91.00%  LOAD LINE: 95.00%  NONCE: 2 EXPIRES: ",
-        "Message (3/4) 2026-09-11T11:30:15Z  CHAIN: 296 VERIFIER:  0xe7e95d63f903e36c7",
-        "Message (4/4) a34ee2adf9fc7dcff49 515a",
+        "Message (3/4) 2026-09-11T15:27:49Z  CHAIN: 296 VERIFIER:  0x835408327a72307e",
+        "Message (4/4) 79826aa3a9b038c6d7 3429c1",
         "Sign message"
       ]
     },
     {
-      "label": "device-approved HALT accepted",
+      "label": "valid HALT straight to the verifier - wrong door, must revert",
+      "call": "MandateVerifier.haltMarket",
+      "to": "0x835408327a72307e79826aa3A9b038c6d73429c1",
+      "tx": "0x96de631c3a8f8b93a479df103dfc5bc1c47454b305730d2b7ae6c342d0644b32",
+      "hashscan": "https://hashscan.io/testnet/transaction/0x96de631c3a8f8b93a479df103dfc5bc1c47454b305730d2b7ae6c342d0644b32",
+      "status": "REVERTED",
+      "mirror": "CONTRACT_REVERT_EXECUTED",
+      "revertData": "0xa29963d7000000000000000000000000a9f24d9633bf74d4893c6687cd2c9f4ecd6f413a"
+    },
+    {
+      "label": "valid HALT straight to the adapter - wrong door, must revert",
+      "call": "MandateVerifierAdapter.requireMandate",
+      "to": "0xdA71f48eb26579A94AaEF03A87F0866D089E6D48",
+      "tx": "0x61625e137f227d9748d63ebc815a608838443342be00aab0219f23cb02a9e96d",
+      "hashscan": "https://hashscan.io/testnet/transaction/0x61625e137f227d9748d63ebc815a608838443342be00aab0219f23cb02a9e96d",
+      "status": "REVERTED",
+      "mirror": "CONTRACT_REVERT_EXECUTED",
+      "revertData": "0x59d2759c000000000000000000000000a9f24d9633bf74d4893c6687cd2c9f4ecd6f413a"
+    },
+    {
+      "label": "after both wrong doors - approval unspent",
+      "halted": false,
+      "verifierHalted": false,
+      "loadLineBps": 9500,
+      "nonceUsed": false
+    },
+    {
+      "label": "the same HALT through LoadLine - accepted",
       "call": "LoadLine.halt",
-      "tx": "0xe14eb03715dba824a06de55bc0aea6753e790f6f6073f21ac8ff06bc492bbee3",
-      "hashscan": "https://hashscan.io/testnet/transaction/0xe14eb03715dba824a06de55bc0aea6753e790f6f6073f21ac8ff06bc492bbee3",
+      "to": "0xF867B6F41b21e9d72f327F867aE898620D022C80",
+      "tx": "0x559bd71fee818041a9ce30285e1a7e3588b6ffb14b6ed8067fbaf91aaf07781f",
+      "hashscan": "https://hashscan.io/testnet/transaction/0x559bd71fee818041a9ce30285e1a7e3588b6ffb14b6ed8067fbaf91aaf07781f",
       "status": "SUCCESS",
       "mirror": "SUCCESS",
       "revertData": null
@@ -82,7 +121,9 @@
     {
       "label": "after halt",
       "halted": true,
-      "loadLineBps": 9500
+      "verifierHalted": true,
+      "loadLineBps": 9500,
+      "nonceUsed": true
     },
     {
       "label": "device REJECTS RESUME",
@@ -90,7 +131,7 @@
       "loadLineBps": 9500,
       "coverageBps": 9800,
       "nonce": 3,
-      "mandateText": "PLIMSOLL MANDATE v1\nACTION: RESUME\nMARKET: PLIM-A\nCOVERAGE: 98.00%\nLOAD LINE: 95.00%\nNONCE: 3\nEXPIRES: 2026-09-11T11:30:15Z\nCHAIN: 296\nVERIFIER: 0xe7e95d63f903e36c7a34ee2adf9fc7dcff49515a",
+      "mandateText": "PLIMSOLL MANDATE v1\nACTION: RESUME\nMARKET: PLIM-A\nCOVERAGE: 98.00%\nLOAD LINE: 95.00%\nNONCE: 3\nEXPIRES: 2026-09-11T15:27:49Z\nCHAIN: 296\nVERIFIER: 0x835408327a72307e79826aa3a9b038c6d73429c1",
       "decision": "NO SIGNATURE (refused)",
       "detail": "_tag=EthAppCommandError errorCode=6985 message=Condition not satisfied",
       "signature": null,
@@ -98,8 +139,8 @@
         "Review message",
         "Message (1/4) PLIMSOLL MANDATE  v1 ACTION: RESUME  MARKET: PLIM-A ",
         "Message (2/4) COVERAGE: 98.00%  LOAD LINE: 95.00%  NONCE: 3 EXPIRES: ",
-        "Message (3/4) 2026-09-11T11:30:15Z  CHAIN: 296 VERIFIER:  0xe7e95d63f903e36c7",
-        "Message (4/4) a34ee2adf9fc7dcff49 515a",
+        "Message (3/4) 2026-09-11T15:27:49Z  CHAIN: 296 VERIFIER:  0x835408327a72307e",
+        "Message (4/4) 79826aa3a9b038c6d7 3429c1",
         "Sign message",
         "Reject message"
       ]
@@ -107,15 +148,17 @@
     {
       "label": "RESUME signed by a non-device key - must revert",
       "call": "LoadLine.resume",
-      "tx": "0x764611a2e0c8f848202595d31177085d0bd9e618715b8f0aea6cc71cf9cd088c",
-      "hashscan": "https://hashscan.io/testnet/transaction/0x764611a2e0c8f848202595d31177085d0bd9e618715b8f0aea6cc71cf9cd088c",
+      "to": "0xF867B6F41b21e9d72f327F867aE898620D022C80",
+      "tx": "0xa9fd42a2e061efded9d2fb80378f58ae748b9d4a34bf28a74932b9a0d5c6f5f2",
+      "hashscan": "https://hashscan.io/testnet/transaction/0xa9fd42a2e061efded9d2fb80378f58ae748b9d4a34bf28a74932b9a0d5c6f5f2",
       "status": "REVERTED",
       "mirror": "CONTRACT_REVERT_EXECUTED",
-      "revertData": "0x5f7e60e80000000000000000000000009ea648347167a0acaf4267608e3de7e11bc90a8900000000000000000000000069fc09fa24102a5c02b227072bee5b71d7aef3e2"
+      "revertData": "0x5f7e60e8000000000000000000000000d8eeb4160de5c5c30be50405e39b9ad9371a356300000000000000000000000069fc09fa24102a5c02b227072bee5b71d7aef3e2"
     },
     {
       "label": "after rejected resume",
       "halted": true,
+      "verifierHalted": true,
       "loadLineBps": 9500
     },
     {
@@ -124,23 +167,24 @@
       "loadLineBps": 9500,
       "coverageBps": 9800,
       "nonce": 4,
-      "mandateText": "PLIMSOLL MANDATE v1\nACTION: RESUME\nMARKET: PLIM-A\nCOVERAGE: 98.00%\nLOAD LINE: 95.00%\nNONCE: 4\nEXPIRES: 2026-09-11T11:30:15Z\nCHAIN: 296\nVERIFIER: 0xe7e95d63f903e36c7a34ee2adf9fc7dcff49515a",
+      "mandateText": "PLIMSOLL MANDATE v1\nACTION: RESUME\nMARKET: PLIM-A\nCOVERAGE: 98.00%\nLOAD LINE: 95.00%\nNONCE: 4\nEXPIRES: 2026-09-11T15:27:49Z\nCHAIN: 296\nVERIFIER: 0x835408327a72307e79826aa3a9b038c6d73429c1",
       "decision": "APPROVED on device",
-      "signature": "0xfb87b1bf0fde985711ee87d1a26a1eb2d360b56b7557d77417f71979907903b4412bdbc2ad580b4331ad92113ffc2580eecc1938734103b6bbb6827e97b9c8101c",
+      "signature": "0xed254d2e09ea5d0c4f1db21f70b1f6d64db39977538e0c548351400e71fbc8ad31c8e2f07e62f11ed70574bf6347ad2bf58c56bf6e77d6312f93bf4a3195d3ea1c",
       "screens": [
         "Review message",
         "Message (1/4) PLIMSOLL MANDATE  v1 ACTION: RESUME  MARKET: PLIM-A ",
         "Message (2/4) COVERAGE: 98.00%  LOAD LINE: 95.00%  NONCE: 4 EXPIRES: ",
-        "Message (3/4) 2026-09-11T11:30:15Z  CHAIN: 296 VERIFIER:  0xe7e95d63f903e36c7",
-        "Message (4/4) a34ee2adf9fc7dcff49 515a",
+        "Message (3/4) 2026-09-11T15:27:49Z  CHAIN: 296 VERIFIER:  0x835408327a72307e",
+        "Message (4/4) 79826aa3a9b038c6d7 3429c1",
         "Sign message"
       ]
     },
     {
-      "label": "device-approved RESUME accepted",
+      "label": "device-approved RESUME through LoadLine - accepted",
       "call": "LoadLine.resume",
-      "tx": "0x29465ed228b7d7173dc91a0e07b146a1ca8c3203d6a8f5d5323dc071f33843bc",
-      "hashscan": "https://hashscan.io/testnet/transaction/0x29465ed228b7d7173dc91a0e07b146a1ca8c3203d6a8f5d5323dc071f33843bc",
+      "to": "0xF867B6F41b21e9d72f327F867aE898620D022C80",
+      "tx": "0xc77864c93ff5dfab65b93881f26785979a3c9a85713e01f41b72ad73182a7d8c",
+      "hashscan": "https://hashscan.io/testnet/transaction/0xc77864c93ff5dfab65b93881f26785979a3c9a85713e01f41b72ad73182a7d8c",
       "status": "SUCCESS",
       "mirror": "SUCCESS",
       "revertData": null
@@ -148,7 +192,165 @@
     {
       "label": "after approved resume",
       "halted": false,
+      "verifierHalted": false,
       "loadLineBps": 9500
+    }
+  ],
+  "superseded": [
+    {
+      "reason": "run against the unlocked authority stack, before the verifier and adapter were locked to LoadLine",
+      "network": "Hedera Testnet (296)",
+      "device": {
+        "emulator": "Speculos, private BIP-39 seed",
+        "model": "nanosp",
+        "app": "app-ethereum 1.22.3",
+        "address": "0x69fC09FA24102a5C02B227072Bee5b71d7AeF3e2"
+      },
+      "verifier": "0xE7e95D63f903E36C7A34Ee2aDf9FC7dCfF49515A",
+      "loadLine": "0xF867B6F41b21e9d72f327F867aE898620D022C80",
+      "market": "PLIM-A",
+      "noteId": "0x376011be372685b3e6d566a7ba172f8b8968ac7a6d56d23e67046e2fd24d253c",
+      "steps": [
+        {
+          "label": "device approves SET-THRESHOLD at 95.00%",
+          "action": "SET-THRESHOLD",
+          "loadLineBps": 9500,
+          "coverageBps": 12000,
+          "nonce": 1,
+          "mandateText": "PLIMSOLL MANDATE v1\nACTION: SET-THRESHOLD\nMARKET: PLIM-A\nCOVERAGE: 120.00%\nLOAD LINE: 95.00%\nNONCE: 1\nEXPIRES: 2026-09-11T11:30:15Z\nCHAIN: 296\nVERIFIER: 0xe7e95d63f903e36c7a34ee2adf9fc7dcff49515a",
+          "decision": "APPROVED on device",
+          "signature": "0xfb3086c97bd124b83b7f9fd0feb04420c607d83e4a440d98e3ef39dd2cec3ed87bd6dd30e0ed5f2ccbec6446e61229bd44d80a8e66704433a87cc3053412fb541c",
+          "screens": [
+            "Review message",
+            "Message (1/4) PLIMSOLL MANDATE  v1 ACTION: SET- THRESHOLD ",
+            "Message (2/4) MARKET: PLIM-A  COVERAGE: 120.00%  LOAD LINE: 95.00% ",
+            "Message (3/4) NONCE: 1 EXPIRES:  2026-09-11T11:30:15Z  CHAIN: 296 VERIFIER: ",
+            "Message (4/4) 0xe7e95d63f903e36c7 a34ee2adf9fc7dcff49 515a",
+            "Sign message"
+          ]
+        },
+        {
+          "label": "same mandate submitted with 90.00% - must revert",
+          "call": "LoadLine.setThreshold",
+          "tx": "0x5daded84a201077440491157d92d1301c03db8405443f9a7d384f4e734f4f98c",
+          "hashscan": "https://hashscan.io/testnet/transaction/0x5daded84a201077440491157d92d1301c03db8405443f9a7d384f4e734f4f98c",
+          "status": "REVERTED",
+          "mirror": "CONTRACT_REVERT_EXECUTED",
+          "revertData": "0x20e11789376011be372685b3e6d566a7ba172f8b8968ac7a6d56d23e67046e2fd24d253c0000000000000000000000000000000000000000000000000000000000002328000000000000000000000000000000000000000000000000000000000000251c"
+        },
+        {
+          "label": "same mandate submitted with the 95.00% it approved",
+          "call": "LoadLine.setThreshold",
+          "tx": "0x5edc25a9b1a6163b481069809bb33aa31cd6ec65deca9ffa66b229e5604a1f19",
+          "hashscan": "https://hashscan.io/testnet/transaction/0x5edc25a9b1a6163b481069809bb33aa31cd6ec65deca9ffa66b229e5604a1f19",
+          "status": "SUCCESS",
+          "mirror": "SUCCESS",
+          "revertData": null
+        },
+        {
+          "label": "after threshold",
+          "halted": false,
+          "loadLineBps": 9500
+        },
+        {
+          "label": "device approves HALT",
+          "action": "HALT",
+          "loadLineBps": 9500,
+          "coverageBps": 9100,
+          "nonce": 2,
+          "mandateText": "PLIMSOLL MANDATE v1\nACTION: HALT\nMARKET: PLIM-A\nCOVERAGE: 91.00%\nLOAD LINE: 95.00%\nNONCE: 2\nEXPIRES: 2026-09-11T11:30:15Z\nCHAIN: 296\nVERIFIER: 0xe7e95d63f903e36c7a34ee2adf9fc7dcff49515a",
+          "decision": "APPROVED on device",
+          "signature": "0x12a5c8d11e9ee7c82268a8c6243e2de3382f6733e4c0b438a16204a74d7d5f4e4e7cd26d994fb637cfbe99a578a2de9dc8351d7fefeae189dc356bb8e4b660361c",
+          "screens": [
+            "Review message",
+            "Message (1/4) PLIMSOLL MANDATE  v1 ACTION: HALT  MARKET: PLIM-A ",
+            "Message (2/4) COVERAGE: 91.00%  LOAD LINE: 95.00%  NONCE: 2 EXPIRES: ",
+            "Message (3/4) 2026-09-11T11:30:15Z  CHAIN: 296 VERIFIER:  0xe7e95d63f903e36c7",
+            "Message (4/4) a34ee2adf9fc7dcff49 515a",
+            "Sign message"
+          ]
+        },
+        {
+          "label": "device-approved HALT accepted",
+          "call": "LoadLine.halt",
+          "tx": "0xe14eb03715dba824a06de55bc0aea6753e790f6f6073f21ac8ff06bc492bbee3",
+          "hashscan": "https://hashscan.io/testnet/transaction/0xe14eb03715dba824a06de55bc0aea6753e790f6f6073f21ac8ff06bc492bbee3",
+          "status": "SUCCESS",
+          "mirror": "SUCCESS",
+          "revertData": null
+        },
+        {
+          "label": "after halt",
+          "halted": true,
+          "loadLineBps": 9500
+        },
+        {
+          "label": "device REJECTS RESUME",
+          "action": "RESUME",
+          "loadLineBps": 9500,
+          "coverageBps": 9800,
+          "nonce": 3,
+          "mandateText": "PLIMSOLL MANDATE v1\nACTION: RESUME\nMARKET: PLIM-A\nCOVERAGE: 98.00%\nLOAD LINE: 95.00%\nNONCE: 3\nEXPIRES: 2026-09-11T11:30:15Z\nCHAIN: 296\nVERIFIER: 0xe7e95d63f903e36c7a34ee2adf9fc7dcff49515a",
+          "decision": "NO SIGNATURE (refused)",
+          "detail": "_tag=EthAppCommandError errorCode=6985 message=Condition not satisfied",
+          "signature": null,
+          "screens": [
+            "Review message",
+            "Message (1/4) PLIMSOLL MANDATE  v1 ACTION: RESUME  MARKET: PLIM-A ",
+            "Message (2/4) COVERAGE: 98.00%  LOAD LINE: 95.00%  NONCE: 3 EXPIRES: ",
+            "Message (3/4) 2026-09-11T11:30:15Z  CHAIN: 296 VERIFIER:  0xe7e95d63f903e36c7",
+            "Message (4/4) a34ee2adf9fc7dcff49 515a",
+            "Sign message",
+            "Reject message"
+          ]
+        },
+        {
+          "label": "RESUME signed by a non-device key - must revert",
+          "call": "LoadLine.resume",
+          "tx": "0x764611a2e0c8f848202595d31177085d0bd9e618715b8f0aea6cc71cf9cd088c",
+          "hashscan": "https://hashscan.io/testnet/transaction/0x764611a2e0c8f848202595d31177085d0bd9e618715b8f0aea6cc71cf9cd088c",
+          "status": "REVERTED",
+          "mirror": "CONTRACT_REVERT_EXECUTED",
+          "revertData": "0x5f7e60e80000000000000000000000009ea648347167a0acaf4267608e3de7e11bc90a8900000000000000000000000069fc09fa24102a5c02b227072bee5b71d7aef3e2"
+        },
+        {
+          "label": "after rejected resume",
+          "halted": true,
+          "loadLineBps": 9500
+        },
+        {
+          "label": "device approves RESUME",
+          "action": "RESUME",
+          "loadLineBps": 9500,
+          "coverageBps": 9800,
+          "nonce": 4,
+          "mandateText": "PLIMSOLL MANDATE v1\nACTION: RESUME\nMARKET: PLIM-A\nCOVERAGE: 98.00%\nLOAD LINE: 95.00%\nNONCE: 4\nEXPIRES: 2026-09-11T11:30:15Z\nCHAIN: 296\nVERIFIER: 0xe7e95d63f903e36c7a34ee2adf9fc7dcff49515a",
+          "decision": "APPROVED on device",
+          "signature": "0xfb87b1bf0fde985711ee87d1a26a1eb2d360b56b7557d77417f71979907903b4412bdbc2ad580b4331ad92113ffc2580eecc1938734103b6bbb6827e97b9c8101c",
+          "screens": [
+            "Review message",
+            "Message (1/4) PLIMSOLL MANDATE  v1 ACTION: RESUME  MARKET: PLIM-A ",
+            "Message (2/4) COVERAGE: 98.00%  LOAD LINE: 95.00%  NONCE: 4 EXPIRES: ",
+            "Message (3/4) 2026-09-11T11:30:15Z  CHAIN: 296 VERIFIER:  0xe7e95d63f903e36c7",
+            "Message (4/4) a34ee2adf9fc7dcff49 515a",
+            "Sign message"
+          ]
+        },
+        {
+          "label": "device-approved RESUME accepted",
+          "call": "LoadLine.resume",
+          "tx": "0x29465ed228b7d7173dc91a0e07b146a1ca8c3203d6a8f5d5323dc071f33843bc",
+          "hashscan": "https://hashscan.io/testnet/transaction/0x29465ed228b7d7173dc91a0e07b146a1ca8c3203d6a8f5d5323dc071f33843bc",
+          "status": "SUCCESS",
+          "mirror": "SUCCESS",
+          "revertData": null
+        },
+        {
+          "label": "after approved resume",
+          "halted": false,
+          "loadLineBps": 9500
+        }
+      ]
     }
   ]
 }

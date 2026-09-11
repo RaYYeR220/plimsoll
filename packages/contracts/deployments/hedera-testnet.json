@@ -25,20 +25,22 @@
   },
   "contracts": {
     "MandateVerifier": {
-      "address": "0xe7e95d63f903e36c7a34ee2adf9fc7dcff49515a",
-      "hederaId": "0.0.10474281",
-      "deployTx": "0xf7a3bb3cc6b909bada73b03cd439c49aaa968dc995e4e4a48c02fa5d830d974e",
-      "runtimeBytes": 6767,
+      "address": "0x835408327a72307e79826aa3A9b038c6d73429c1",
+      "hederaId": "0.0.10477161",
+      "deployTx": "0xe71a93e309335adaef8fa599993022aea89a5a477e80615714739627b69c993a",
+      "note": "created inside MandateVerifierAdapter's constructor; gatekeeper = 0xda71f48eb26579a94aaef03a87f0866d089e6d48",
+      "runtimeBytes": 6892,
       "sourcify": "exact_match",
-      "hashscan": "https://hashscan.io/testnet/contract/0xe7e95d63f903e36c7a34ee2adf9fc7dcff49515a"
+      "hashscan": "https://hashscan.io/testnet/contract/0x835408327a72307e79826aa3A9b038c6d73429c1"
     },
     "MandateVerifierAdapter": {
-      "address": "0xb8a94643111ba230459f1d7ecf3bdbc348b83e63",
-      "hederaId": "0.0.10474283",
-      "deployTx": "0x5a4a7500660b5b11c82d22d05af4616ebb4c94189f570d43927725c691fe5eb0",
-      "runtimeBytes": 3970,
+      "address": "0xda71f48eb26579a94aaef03a87f0866d089e6d48",
+      "hederaId": "0.0.10477160",
+      "deployTx": "0xe71a93e309335adaef8fa599993022aea89a5a477e80615714739627b69c993a",
+      "note": "accepts requireMandate only from LoadLine 0xF867B6F41b21e9d72f327F867aE898620D022C80",
+      "runtimeBytes": 4095,
       "sourcify": "exact_match",
-      "hashscan": "https://hashscan.io/testnet/contract/0xb8a94643111ba230459f1d7ecf3bdbc348b83e63"
+      "hashscan": "https://hashscan.io/testnet/contract/0xda71f48eb26579a94aaef03a87f0866d089e6d48"
     },
     "CoverageOracle": {
       "address": "0xCE13De224ed918D7b8B2717492849e0A82648ca3",
@@ -55,7 +57,8 @@
       "deployTx": "0x97c1af3c7b7aed62d3b993d7cd4085334a3e5ca628d11270649a6e26c27ab05e",
       "runtimeBytes": 3642,
       "sourcify": "exact_match",
-      "hashscan": "https://hashscan.io/testnet/contract/0xf867b6f41b21e9d72f327f867ae898620d022c80"
+      "hashscan": "https://hashscan.io/testnet/contract/0xf867b6f41b21e9d72f327f867ae898620d022c80",
+      "note": "kept; repointed to the locked adapter through its owner-gated setter"
     },
     "CashLegController": {
       "address": "0xccedcc53902b925c72e3c45d4cc176806326b30b",
@@ -84,16 +87,12 @@
   },
   "wiring": [
     {
-      "call": "None.setLoadLine(address)",
-      "tx": "0xb87659e4d60032cdc06e48648187e1487beaddc5048ac29bbc3b3dc95c7ee39b"
-    },
-    {
-      "call": "LoadLine.setOracle(address)",
-      "tx": "0x27ec00f21447bcdde1f5ad12801466f036d4e78652e6d245b16e5fdbd7d5a1fe"
-    },
-    {
       "call": "MandateVerifierAdapter.registerMarket(string)",
-      "tx": "0xbba5ea47ecc91f8555f484261d111f0c25ff17bd251325e9a72dc04bde8a15e8"
+      "tx": "0xd81b522cfece5f03b2ce6ed62ee55bde1298fa310a042dd847876e18499d50c9"
+    },
+    {
+      "call": "None.setMandateAuthority(address)",
+      "tx": "0xa45f991551ffe2808b74dbd9fb51862155d2d415b9a14ceef4177633dba4562d"
     }
   ],
   "note_under_management": {
@@ -200,91 +199,121 @@
     "caveat": "forge script cannot drive HTS. It executes the script body locally, and 0x167 has no EVM bytecode there, so the call dies with InvalidFEOpcode. These calls are made with cast send instead."
   },
   "device_proof": "deployments/device-proof.json",
-  "superseded": {
-    "reason": "Superseded on 2026-09-11. The verifier trusted the deployer's software key, so a halt could be approved without any device; and LoadLine wrote a caller-supplied threshold that the mandate did not bind. The verifier's authority and the adapter's verifier are immutable, LoadLine's call to the authority changed, and CashLegController reads an immutable LoadLine - so all six were replaced, and with the controller the cash token whose freeze key it permanently holds. CoverageOracle was kept and rewired, preserving the registered note and its attestor.",
-    "mandateAuthoritySigner": "0xa9f24d9633bf74d4893c6687cd2c9f4ecd6f413a",
-    "contracts": {
-      "MandateVerifier": {
-        "address": "0xf4622CAF505153C74430094f58b408d2CD19c66B",
-        "hederaId": "0.0.10451750",
-        "deployTx": "0x4f6f4731ad17fdeb68e89c70d0481a0608d6b9ac0d0116b7e24ae32264eee8ef",
-        "runtimeBytes": 6767,
-        "sourcify": "exact_match",
-        "hashscan": "https://hashscan.io/testnet/contract/0xf4622CAF505153C74430094f58b408d2CD19c66B"
+  "superseded": [
+    {
+      "reason": "Superseded on 2026-09-11. The verifier trusted the deployer's software key, so a halt could be approved without any device; and LoadLine wrote a caller-supplied threshold that the mandate did not bind. The verifier's authority and the adapter's verifier are immutable, LoadLine's call to the authority changed, and CashLegController reads an immutable LoadLine - so all six were replaced, and with the controller the cash token whose freeze key it permanently holds. CoverageOracle was kept and rewired, preserving the registered note and its attestor.",
+      "mandateAuthoritySigner": "0xa9f24d9633bf74d4893c6687cd2c9f4ecd6f413a",
+      "contracts": {
+        "MandateVerifier": {
+          "address": "0xf4622CAF505153C74430094f58b408d2CD19c66B",
+          "hederaId": "0.0.10451750",
+          "deployTx": "0x4f6f4731ad17fdeb68e89c70d0481a0608d6b9ac0d0116b7e24ae32264eee8ef",
+          "runtimeBytes": 6767,
+          "sourcify": "exact_match",
+          "hashscan": "https://hashscan.io/testnet/contract/0xf4622CAF505153C74430094f58b408d2CD19c66B"
+        },
+        "MandateVerifierAdapter": {
+          "address": "0xA223cdAa28e66156C8fa1973877B12d84c967592",
+          "hederaId": "0.0.10451751",
+          "deployTx": "0xc148b6a4c3a1982b28f6e74aaf4efc445bef9427b6bf95caf3b6baf738fb9c7f",
+          "runtimeBytes": 3886,
+          "sourcify": "exact_match",
+          "hashscan": "https://hashscan.io/testnet/contract/0xA223cdAa28e66156C8fa1973877B12d84c967592"
+        },
+        "LoadLine": {
+          "address": "0x0066Cb203bccc94f5B1A46BE061caec4F90054D3",
+          "hederaId": "0.0.10451754",
+          "deployTx": "0xc2df54d52c711c52359d77794dfcfcabbef5cd44a4dc938334d826c1d688ee70",
+          "runtimeBytes": 3561,
+          "sourcify": "exact_match",
+          "hashscan": "https://hashscan.io/testnet/contract/0x0066Cb203bccc94f5B1A46BE061caec4F90054D3"
+        },
+        "CashLegController": {
+          "address": "0xAbAd9dcE3fD4511772e0345265D54d5e6D62de24",
+          "hederaId": "0.0.10451756",
+          "deployTx": "0x714fa8b57f975cda4fd27ecda77349e80fb364dbbacde6692128fb94daaf4a16",
+          "runtimeBytes": 5455,
+          "sourcify": "exact_match",
+          "hashscan": "https://hashscan.io/testnet/contract/0xAbAd9dcE3fD4511772e0345265D54d5e6D62de24"
+        },
+        "BerthMarket": {
+          "address": "0x1163E53944536C9F3e171c6D33a060E6BB2106bA",
+          "hederaId": "0.0.10451969",
+          "deployTx": "0x1d4c8ed075174123946692d977aafc1c0b6e1a6e3342efbebfca5269d94c8553",
+          "runtimeBytes": 8697,
+          "sourcify": "exact_match",
+          "hashscan": "https://hashscan.io/testnet/contract/0x1163E53944536C9F3e171c6D33a060E6BB2106bA"
+        },
+        "CouponScheduler": {
+          "address": "0xa5495ccf7624f8F78abcB7D6412102193885e3c1",
+          "hederaId": "0.0.10451970",
+          "deployTx": "0x47fbb05cb30ea20c65a1eed988b619424b1d058664c70b396273851c4513db30",
+          "runtimeBytes": 8195,
+          "sourcify": "exact_match",
+          "hashscan": "https://hashscan.io/testnet/contract/0xa5495ccf7624f8F78abcB7D6412102193885e3c1"
+        }
       },
-      "MandateVerifierAdapter": {
-        "address": "0xA223cdAa28e66156C8fa1973877B12d84c967592",
-        "hederaId": "0.0.10451751",
-        "deployTx": "0xc148b6a4c3a1982b28f6e74aaf4efc445bef9427b6bf95caf3b6baf738fb9c7f",
-        "runtimeBytes": 3886,
-        "sourcify": "exact_match",
-        "hashscan": "https://hashscan.io/testnet/contract/0xA223cdAa28e66156C8fa1973877B12d84c967592"
+      "cash_leg": {
+        "what": "HTS native fungible token whose freeze key is held by CashLegController as a contract-ID key.",
+        "evmAddress": "0x00000000000000000000000000000000009F7bF4",
+        "hederaId": "0.0.10451956",
+        "createTx": "0xe1571168396f574ddf49d6e1774816fae1031f619d55fd91baf3370c247becc6",
+        "fundingTx": "0x0e4ae39e45bacf2c5b3cdabacc758dbf3f65c466d7de2e65ccea62cb3484df4b",
+        "decimals": 6,
+        "initialSupply": 0,
+        "maxSupply": 1000000000000000,
+        "keys": "freeze + supply are both contract-ID keys naming contract 0.0.10451756, which is CashLegController (EVM 0xAbAd9dcE3fD4511772e0345265D54d5e6D62de24). The mirror node renders them as ProtobufEncoded because a contract-ID key is not a plain ed25519 or ECDSA key; the encoded bytes 0a0518acf6fd04 decode to Key.contractID.contractNum = 10451756. There is NO admin key, so the freeze key can never be rotated away and this controller can never be replaced for this token.",
+        "treasury": "0.0.10451756 (CashLegController itself)",
+        "freezeKeyHolder": "0.0.10451756",
+        "caveat": "forge script cannot drive HTS. It executes the script body locally, and 0x167 has no EVM bytecode there, so the call dies with InvalidFEOpcode. These calls are made with cast send instead.",
+        "hashscan": "https://hashscan.io/testnet/token/0.0.10451956"
       },
-      "LoadLine": {
-        "address": "0x0066Cb203bccc94f5B1A46BE061caec4F90054D3",
-        "hederaId": "0.0.10451754",
-        "deployTx": "0xc2df54d52c711c52359d77794dfcfcabbef5cd44a4dc938334d826c1d688ee70",
-        "runtimeBytes": 3561,
-        "sourcify": "exact_match",
-        "hashscan": "https://hashscan.io/testnet/contract/0x0066Cb203bccc94f5B1A46BE061caec4F90054D3"
-      },
-      "CashLegController": {
-        "address": "0xAbAd9dcE3fD4511772e0345265D54d5e6D62de24",
-        "hederaId": "0.0.10451756",
-        "deployTx": "0x714fa8b57f975cda4fd27ecda77349e80fb364dbbacde6692128fb94daaf4a16",
-        "runtimeBytes": 5455,
-        "sourcify": "exact_match",
-        "hashscan": "https://hashscan.io/testnet/contract/0xAbAd9dcE3fD4511772e0345265D54d5e6D62de24"
-      },
-      "BerthMarket": {
-        "address": "0x1163E53944536C9F3e171c6D33a060E6BB2106bA",
-        "hederaId": "0.0.10451969",
-        "deployTx": "0x1d4c8ed075174123946692d977aafc1c0b6e1a6e3342efbebfca5269d94c8553",
-        "runtimeBytes": 8697,
-        "sourcify": "exact_match",
-        "hashscan": "https://hashscan.io/testnet/contract/0x1163E53944536C9F3e171c6D33a060E6BB2106bA"
-      },
-      "CouponScheduler": {
-        "address": "0xa5495ccf7624f8F78abcB7D6412102193885e3c1",
-        "hederaId": "0.0.10451970",
-        "deployTx": "0x47fbb05cb30ea20c65a1eed988b619424b1d058664c70b396273851c4513db30",
-        "runtimeBytes": 8195,
-        "sourcify": "exact_match",
-        "hashscan": "https://hashscan.io/testnet/contract/0xa5495ccf7624f8F78abcB7D6412102193885e3c1"
-      }
+      "wiring": [
+        {
+          "call": "CoverageOracle.setLoadLine",
+          "tx": "0x3e7b602ccc7311be92f924727334d6d8682f59c65f153d48fc10d6f605a47974"
+        },
+        {
+          "call": "LoadLine.setOracle",
+          "tx": "0x866d9223134edc51dab602c584a7adf865956b5c47b48e5749ed99c55460203e"
+        },
+        {
+          "call": "MandateVerifierAdapter.registerMarket('PLIM-A')",
+          "tx": "0x70293afd63cfac47060acd9588f6e56c9712ddb51f31cee972ac183a2d1c59b7"
+        },
+        {
+          "call": "CoverageOracle.registerNote",
+          "tx": "0x6826bdebc05396eaa7ff19f97ead127a59e5a0b313e971a7cf28a6d6ab887a07"
+        }
+      ]
     },
-    "cash_leg": {
-      "what": "HTS native fungible token whose freeze key is held by CashLegController as a contract-ID key.",
-      "evmAddress": "0x00000000000000000000000000000000009F7bF4",
-      "hederaId": "0.0.10451956",
-      "createTx": "0xe1571168396f574ddf49d6e1774816fae1031f619d55fd91baf3370c247becc6",
-      "fundingTx": "0x0e4ae39e45bacf2c5b3cdabacc758dbf3f65c466d7de2e65ccea62cb3484df4b",
-      "decimals": 6,
-      "initialSupply": 0,
-      "maxSupply": 1000000000000000,
-      "keys": "freeze + supply are both contract-ID keys naming contract 0.0.10451756, which is CashLegController (EVM 0xAbAd9dcE3fD4511772e0345265D54d5e6D62de24). The mirror node renders them as ProtobufEncoded because a contract-ID key is not a plain ed25519 or ECDSA key; the encoded bytes 0a0518acf6fd04 decode to Key.contractID.contractNum = 10451756. There is NO admin key, so the freeze key can never be rotated away and this controller can never be replaced for this token.",
-      "treasury": "0.0.10451756 (CashLegController itself)",
-      "freezeKeyHolder": "0.0.10451756",
-      "caveat": "forge script cannot drive HTS. It executes the script body locally, and 0x167 has no EVM bytecode there, so the call dies with InvalidFEOpcode. These calls are made with cast send instead.",
-      "hashscan": "https://hashscan.io/testnet/token/0.0.10451956"
-    },
-    "wiring": [
-      {
-        "call": "CoverageOracle.setLoadLine",
-        "tx": "0x3e7b602ccc7311be92f924727334d6d8682f59c65f153d48fc10d6f605a47974"
-      },
-      {
-        "call": "LoadLine.setOracle",
-        "tx": "0x866d9223134edc51dab602c584a7adf865956b5c47b48e5749ed99c55460203e"
-      },
-      {
-        "call": "MandateVerifierAdapter.registerMarket('PLIM-A')",
-        "tx": "0x70293afd63cfac47060acd9588f6e56c9712ddb51f31cee972ac183a2d1c59b7"
-      },
-      {
-        "call": "CoverageOracle.registerNote",
-        "tx": "0x6826bdebc05396eaa7ff19f97ead127a59e5a0b313e971a7cf28a6d6ab887a07"
+    {
+      "reason": "Superseded on 2026-09-11 by the locked authority. This verifier and adapter accepted calls from anyone, so a signed mandate could be spent at either of them directly - burning its nonce without LoadLine's own state moving, which for a halt fails open. LoadLine, CashLegController, the cash token and the venue were kept; only these two were replaced.",
+      "contracts": {
+        "MandateVerifier": {
+          "address": "0xe7e95d63f903e36c7a34ee2adf9fc7dcff49515a",
+          "hederaId": "0.0.10474281",
+          "deployTx": "0xf7a3bb3cc6b909bada73b03cd439c49aaa968dc995e4e4a48c02fa5d830d974e",
+          "runtimeBytes": 6767,
+          "sourcify": "exact_match",
+          "hashscan": "https://hashscan.io/testnet/contract/0xe7e95d63f903e36c7a34ee2adf9fc7dcff49515a"
+        },
+        "MandateVerifierAdapter": {
+          "address": "0xb8a94643111ba230459f1d7ecf3bdbc348b83e63",
+          "hederaId": "0.0.10474283",
+          "deployTx": "0x5a4a7500660b5b11c82d22d05af4616ebb4c94189f570d43927725c691fe5eb0",
+          "runtimeBytes": 3970,
+          "sourcify": "exact_match",
+          "hashscan": "https://hashscan.io/testnet/contract/0xb8a94643111ba230459f1d7ecf3bdbc348b83e63"
+        }
       }
-    ]
+    }
+  ],
+  "lock": {
+    "summary": "LoadLine -> MandateVerifierAdapter -> MandateVerifier, each hop accepting calls only from the one before",
+    "verifierGatekeeper": "0xdA71f48eb26579A94AaEF03A87F0866D089E6D48",
+    "adapterLoadLine": "0xF867B6F41b21e9d72f327F867aE898620D022C80",
+    "loadLineAuthority": "0xdA71f48eb26579A94AaEF03A87F0866D089E6D48",
+    "construction": "the adapter deploys the verifier in its own constructor, and the verifier records msg.sender as its sole caller - no setter, no window"
   }
 }
