@@ -86,6 +86,13 @@ def main() -> int:
     else:
         print(f"  {'ATS note (PLIM-A)':<24} {note['address']}  {info['contract_id']}")
 
+    for symbol, n in record["ats"].get("notes", {}).items():
+        info = get(f"contracts/{n['address']}")
+        if "_error" in info or info.get("contract_id") != n.get("hederaId"):
+            failures.append(f"{symbol}: mirror has {info.get('contract_id')} for {n['address']}, record says {n.get('hederaId')}")
+        else:
+            print(f"  {'ATS note (' + symbol + ')':<24} {n['address']}  {info['contract_id']}")
+
     if failures:
         print("\nFAILED:")
         for f in failures:

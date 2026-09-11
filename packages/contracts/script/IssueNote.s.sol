@@ -112,6 +112,12 @@ interface IAtsNote {
 
     function addIssuer(address issuer) external returns (bool);
 
+    function grantRole(bytes32 role, address account) external returns (bool);
+
+    function authorizeOperatorByPartition(bytes32 partition, address operator) external;
+
+    function approve(address spender, uint256 value) external returns (bool);
+
     function transferByPartition(
         bytes32 partition,
         BasicTransferInfo calldata info,
@@ -159,15 +165,16 @@ contract IssueNote is Script {
 
         IAtsFactory.SecurityData memory security = IAtsFactory.SecurityData({
             resolver: resolver,
-            maxSupply: 1_000_000_00, // 1,000,000 notes at 2 decimals
+            // Defaults reproduce PLIM-A; a series is otherwise described entirely by the environment.
+            maxSupply: vm.envOr("NOTE_MAX_SUPPLY", uint256(1_000_000_00)),
             resolverProxyConfiguration: IAtsFactory.ResolverProxyConfiguration({
                 key: vm.envBytes32("ATS_BOND_CONFIG_ID"),
                 version: vm.envUint("ATS_BOND_CONFIG_VERSION")
             }),
             erc20MetadataInfo: IAtsFactory.ERC20MetadataInfo({
-                name: "Plimsoll Note Series A",
-                symbol: "PLIM-A",
-                isin: "US0000PLIMA6",
+                name: vm.envOr("NOTE_NAME", string("Plimsoll Note Series A")),
+                symbol: vm.envOr("NOTE_MARKET", string("PLIM-A")),
+                isin: vm.envOr("NOTE_ISIN", string("US0000PLIMA6")),
                 decimals: 2
             }),
             rbacs: rbacs,
@@ -191,7 +198,8 @@ contract IssueNote is Script {
             security: security,
             bondDetails: IAtsFactory.BondDetailsData({
                 currency: 0x555344, // "USD"
-                nominalValue: 100_00,
+                // ATS stores par as an integer plus its own decimals: 100_00 at 2 decimals is 100.00.
+                nominalValue: vm.envOr("NOTE_NOMINAL_VALUE", uint256(100_00)),
                 nominalValueDecimals: 2,
                 startingDate: block.timestamp + 60,
                 maturityDate: block.timestamp + 365 days
@@ -262,16 +270,16 @@ contract ActivateNote is Script {
             IAtsNote.IssueData({
                 partition: DEFAULT_PARTITION,
                 tokenHolder: deployer,
-                value: 10_000_00,
+                value: vm.envOr("NOTE_ISSUE_AMOUNT", uint256(10_000_00)),
                 data: ""
             })
         );
 
-        note.transferByPartition(
-            DEFAULT_PARTITION,
-            IAtsNote.BasicTransferInfo({ to: buyer, value: 1_000_00 }),
-            ""
-        );
+        // PLIM-A moved part of its issue to a second holder; a series may instead stay with the issuer.
+        uint256 toBuyer = vm.envOr("NOTE_TRANSFER_AMOUNT", uint256(1_000_00));
+        if (toBuyer != 0) {
+            note.transferByPartition(DEFAULT_PARTITION, IAtsNote.BasicTransferInfo({ to: buyer, value: toBuyer }), "");
+        }
         vm.stopBroadcast();
 
         console.log("issuer balance  %s", note.balanceOfByPartition(DEFAULT_PARTITION, deployer));
@@ -324,5 +332,72 @@ contract BlockAndProve is Script {
         console.log("preflight to ALLOWED  status=%s", allowedOk);
         console.log("  code   %s", vm.toString(allowedCode));
         console.log("  reason %s", vm.toString(allowedReason));
+    }
+}
+
+interface ICouponScheduler {
+    struct ScheduleParams {
+        address note;
+        address project;
+        address payer;
+        address paymentAgent;
+        uint128 couponAmount;
+        uint64 firstPaymentAt;
+        uint64 period;
+        uint64 maturity;
+        uint64 gasLimit;
+        uint32 maxPeriods;
+    }
+
+    function createSchedule(bytes32 noteId, ScheduleParams calldata p) external;
+}
+
+/**
+ * @notice Connects an issued note to the venue: coupon KPI rights, market escrow rights, a schedule.
+ * @dev The scheduler writes coverage into the note's KPI series, which ATS gates on
+ *      ROLE_KPI_MANAGER. The issuer authorises BerthMarket as operator (what a bid needs) and, if
+ *      NOTE_LIST_AMOUNT is set, approves it an allowance (what an ask's escrow needs), so an order
+ *      can be placed the moment coverage is proven - placing it now would be refused, correctly,
+ *      because nothing has attested this note yet. The schedule is created but not armed for the same
+ *      reason: arming requires a clear load line.
+ */
+contract ConnectNote is Script {
+    bytes32 private constant DEFAULT_PARTITION = bytes32(uint256(1));
+    bytes32 private constant ROLE_KPI_MANAGER = 0x7895574f0552ac1a42245f5d7ea23bea04d0cfbc73df53282d588fdaa00f7fb3;
+
+    function run() external {
+        uint256 deployerKey = vm.envUint("PRIVATE_KEY");
+        address issuer = vm.addr(deployerKey);
+        IAtsNote note = IAtsNote(vm.envAddress("ATS_NOTE"));
+        address scheduler = vm.envAddress("COUPON_SCHEDULER");
+        address market = vm.envAddress("BERTH_MARKET");
+        bytes32 noteId = keccak256(bytes(vm.envString("NOTE_MARKET")));
+
+        ICouponScheduler.ScheduleParams memory p = ICouponScheduler.ScheduleParams({
+            note: address(note),
+            project: issuer,
+            payer: issuer,
+            paymentAgent: vm.envAddress("COUPON_PAYMENT_AGENT"),
+            couponAmount: uint128(vm.envUint("COUPON_AMOUNT")),
+            firstPaymentAt: uint64(block.timestamp + vm.envUint("COUPON_FIRST_IN_SECONDS")),
+            period: uint64(vm.envUint("COUPON_PERIOD_SECONDS")),
+            maturity: uint64(block.timestamp + vm.envUint("COUPON_MATURITY_IN_SECONDS")),
+            gasLimit: uint64(vm.envUint("COUPON_GAS_LIMIT")),
+            maxPeriods: uint32(vm.envUint("COUPON_MAX_PERIODS"))
+        });
+
+        vm.startBroadcast(deployerKey);
+        note.grantRole(ROLE_KPI_MANAGER, scheduler);
+        note.authorizeOperatorByPartition(DEFAULT_PARTITION, market);
+        // Asks are escrowed with createHoldFromByPartition, which ATS funds from an ERC-20 allowance;
+        // operator rights alone are refused with InsufficientAllowance. The operator grant above is
+        // what bids need.
+        uint256 listAmount = vm.envOr("NOTE_LIST_AMOUNT", uint256(0));
+        if (listAmount != 0) note.approve(market, listAmount);
+        ICouponScheduler(scheduler).createSchedule(noteId, p);
+        vm.stopBroadcast();
+
+        console.log("NOTE_ID=%s", vm.toString(noteId));
+        console.log("firstPaymentAt=%s maturity=%s", p.firstPaymentAt, p.maturity);
     }
 }

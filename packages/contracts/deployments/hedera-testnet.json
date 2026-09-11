@@ -116,7 +116,8 @@
       "deployBondTx": "0x170dc7139dafafe930e848ea96777962d8dd15835148d506a0a401e80bb3f150",
       "mode": "single-partition, controllable, internal KYC on, control list in BLACKLIST mode",
       "hederaId": "0.0.10451856",
-      "hashscan": "https://hashscan.io/testnet/contract/0xe2Bf359650fbacc7D4801336F8C1FE7061aD6387"
+      "hashscan": "https://hashscan.io/testnet/contract/0xe2Bf359650fbacc7D4801336F8C1FE7061aD6387",
+      "vaultSetHashProvenance": "PLIM-A's registered vaultSetHash 0x2627c1d5...9d57 is sha256('plimsoll/vaults/v1') - a placeholder string hashed by a one-off .env bootstrap on 2026-09-10, never a vault set and never in the repository. It must be replaced via CoverageOracle.setVaultSet with the attestor's canonical hash."
     },
     "lifecycle": [
       {
@@ -154,7 +155,192 @@
         "tx": "0xafdfd60e128f082e713d740f74e76724d258bfde87a7d19bb46c10ca20800cb8",
         "why": "blacklist mode, so this blocks exactly one named counterparty"
       }
-    ]
+    ],
+    "notes": {
+      "PLIM-B": {
+        "name": "Plimsoll Note Series B",
+        "symbol": "PLIM-B",
+        "isin": "US0000PLIMB4",
+        "address": "0xCf759C717E805413aaa7D067dB7BD7A93969Def2",
+        "hederaId": "0.0.10482316",
+        "hashscan": "https://hashscan.io/testnet/contract/0xCf759C717E805413aaa7D067dB7BD7A93969Def2",
+        "deployBondTx": "0x7cd5398c344749b1a47d8bfaf6bd3407c7e4ded731a4eae01bb377f448adcc32",
+        "noteId": "0xb51023289ff2160bbde35658811ef0a869f6e250819060253e6135bc9aaa2f48",
+        "obligation": {
+          "totalSupplyBaseUnits": 1000,
+          "tokenDecimals": 2,
+          "nominalValue": 100,
+          "nominalValueDecimals": 2,
+          "usd": 10.0,
+          "readWith": "totalSupply(), decimals(), getNominalValue(), getNominalValueDecimals() - NominalValueFacet; getBondDetails() does not exist on ATS v8"
+        },
+        "lifecycle": [
+          {
+            "step": "addIssuer",
+            "tx": "0xc2a7af8fa495142507fbb22dfdf46cb345edcbf6cce3af306b9f8612161b3b7e",
+            "result": "SUCCESS",
+            "hashscan": "https://hashscan.io/testnet/transaction/0xc2a7af8fa495142507fbb22dfdf46cb345edcbf6cce3af306b9f8612161b3b7e"
+          },
+          {
+            "step": "grantKyc",
+            "tx": "0x0787f33406724363eb534e5ba9e180f370ac3fce0afd2ece0ed764bf13d1e54d",
+            "result": "SUCCESS",
+            "hashscan": "https://hashscan.io/testnet/transaction/0x0787f33406724363eb534e5ba9e180f370ac3fce0afd2ece0ed764bf13d1e54d"
+          },
+          {
+            "step": "grantKyc",
+            "tx": "0xd742897de13a06334cdc1b2c41544cf19adce0794fddc2c287ba946930744aec",
+            "result": "SUCCESS",
+            "hashscan": "https://hashscan.io/testnet/transaction/0xd742897de13a06334cdc1b2c41544cf19adce0794fddc2c287ba946930744aec"
+          },
+          {
+            "step": "issueByPartition",
+            "tx": "0xfd746178a7b83a5c7f31e880ea795064fb8c15e26dec1bb9bcda6140e1d37ad8",
+            "result": "SUCCESS",
+            "hashscan": "https://hashscan.io/testnet/transaction/0xfd746178a7b83a5c7f31e880ea795064fb8c15e26dec1bb9bcda6140e1d37ad8"
+          }
+        ],
+        "registration": {
+          "oracle": {
+            "step": "CoverageOracle.registerNote",
+            "tx": "0x1db522a5769aef1628e45b706f274e34faa3b012e7db97369ad93fe08d34455f",
+            "result": "SUCCESS",
+            "hashscan": "https://hashscan.io/testnet/transaction/0x1db522a5769aef1628e45b706f274e34faa3b012e7db97369ad93fe08d34455f",
+            "attestor": "0x378F9395F8152669D4a24370341aA37b8d5Cb89D",
+            "maxAgeSeconds": 900,
+            "vaultSetHash": "0x504c414345484f4c4445522d4e4f542d412d5641554c542d5345540000000000",
+            "vaultSetHashIs": "a deliberate placeholder: the bytes32 ASCII string PLACEHOLDER-NOT-A-VAULT-SET, which no canonical hash can produce. Replace with setVaultSet once the Base vault list is final, computed by script/vault-set-hash.mjs."
+          },
+          "adapter": {
+            "step": "MandateVerifierAdapter.registerMarket('PLIM-B')",
+            "tx": "0xd9d37a93a2e0cd1b05b348704326dc608665e740e1c3b70bb74419dd0a497d88",
+            "result": "SUCCESS",
+            "hashscan": "https://hashscan.io/testnet/transaction/0xd9d37a93a2e0cd1b05b348704326dc608665e740e1c3b70bb74419dd0a497d88"
+          },
+          "loadLine": {
+            "step": "LoadLine.setThreshold, device-signed SET-THRESHOLD at 100.00%",
+            "tx": "0xe0a175b24a0ab93880d2059827814f62aeb34c4eaa65afb9f896b77e2b1f2e4d",
+            "result": "SUCCESS",
+            "hashscan": "https://hashscan.io/testnet/transaction/0xe0a175b24a0ab93880d2059827814f62aeb34c4eaa65afb9f896b77e2b1f2e4d",
+            "loadLineBps": 10000,
+            "nonce": 5,
+            "coverageShownBps": 0,
+            "coverageSource": "CoverageOracle.coverageOf(noteId) at signing time",
+            "mandateText": "PLIMSOLL MANDATE v1\nACTION: SET-THRESHOLD\nMARKET: PLIM-B\nCOVERAGE: 0.00%\nLOAD LINE: 100.00%\nNONCE: 5\nEXPIRES: 2026-09-11T19:54:51Z\nCHAIN: 296\nVERIFIER: 0x835408327a72307e79826aa3a9b038c6d73429c1",
+            "signature": "0xe7b971997b13430424df056643fe532d4310629b14a743b27b9df48d09a0a1b6244f3c176b7c1c2a179d7361076d7fdd3f600e3a64a1aeec18e9d3075c8a455c1b",
+            "screens": [
+              "Review message",
+              "Message (1/4) PLIMSOLL MANDATE  v1 ACTION: SET- THRESHOLD ",
+              "Message (2/4) MARKET: PLIM-B  COVERAGE: 0.00%  LOAD LINE: 100.00% ",
+              "Message (3/4) NONCE: 5 EXPIRES:  2026-09-11T19:54:51Z  CHAIN: 296 VERIFIER: ",
+              "Message (4/4) 0x835408327a72307e 79826aa3a9b038c6d7 3429c1",
+              "Sign message"
+            ],
+            "after": {
+              "loadLineBps": 10000,
+              "verifierLoadLineBps": 10000,
+              "clear": false,
+              "verdict": 2,
+              "reason": 3
+            }
+          }
+        },
+        "venue": {
+          "grantRole": {
+            "step": "grantRole",
+            "tx": "0x544cf5b87cd7f3bf1e01d17051a75032a656f133f706aea3d40539d340933c25",
+            "result": "SUCCESS",
+            "hashscan": "https://hashscan.io/testnet/transaction/0x544cf5b87cd7f3bf1e01d17051a75032a656f133f706aea3d40539d340933c25"
+          },
+          "authorizeOperatorByPartition": {
+            "step": "authorizeOperatorByPartition",
+            "tx": "0x502fea1714be4ce126fc5088b6f1d2140c56989d11cb83418dcd93b55635ba6b",
+            "result": "SUCCESS",
+            "hashscan": "https://hashscan.io/testnet/transaction/0x502fea1714be4ce126fc5088b6f1d2140c56989d11cb83418dcd93b55635ba6b"
+          },
+          "createSchedule": {
+            "step": "createSchedule",
+            "tx": "0x254ab7165b0db20bcc153ba4b7dc68117555bd923c285a052eae395246562eb4",
+            "result": "SUCCESS",
+            "hashscan": "https://hashscan.io/testnet/transaction/0x254ab7165b0db20bcc153ba4b7dc68117555bd923c285a052eae395246562eb4"
+          },
+          "couponSchedule": {
+            "scheduler": "0x48d9169f50f1b07076860ea7a3743257aa933d07",
+            "raw": "(0xCf759C717E805413aaa7D067dB7BD7A93969Def2, 0xa9f24d9633BF74D4893c6687CD2c9F4ECd6F413a, 0xa9f24d9633BF74D4893c6687CD2c9F4ECd6F413a, 0x3F65DF74deb47eC8519D76DA54F201dAB655f0C3, 125000 [1.25e5], 1791745004 [1.791e9], 7776000 [7.776e6], 1820602604 [1.82e9], 1000000 [1e6], 0, 5, 0, 0, true, false)",
+            "couponAmount": "125000 = 0.125 PCASH (6 dp) per quarter, 5% a year on $10",
+            "paymentAgent": "the demo's second KYC'd account stands in until PLIM-B has holders to distribute to",
+            "armed": false,
+            "why not armed": "arm() requires a clear load line, and nothing can attest PLIM-B until its vault set is final"
+          },
+          "kpi": "ROLE_KPI_MANAGER granted to the live scheduler, but this bond config has no Kpis facet: addKpiData reverts FunctionNotFound(0x0de2be70)"
+        },
+        "listing": {
+          "status": "ready to list, not placed",
+          "whyNotPlaced": "placeAsk calls LoadLine.requireClear(PLIM-B), which reads NoAttestation: nothing can attest PLIM-B until its vault set is final and the attestor's signatures can be verified on-chain.",
+          "requirement": "An ask is escrowed with createHoldFromByPartition, which ATS funds from an ERC-20 allowance the maker grants the market (decreaseAllowedBalanceForHold). Operator rights alone are refused with InsufficientAllowance. Bids need operator rights instead, for operatorTransferByPartition.",
+          "allowanceBaseUnits": 1000,
+          "forkProbe": {
+            "script": "script/ProbeEscrow.s.sol",
+            "method": "dry run on a fork of live Hedera state, impersonating the market; nothing sent",
+            "operatorRightsOnly": "REVERTED InsufficientAllowance(market, issuer) 0xf180d8f9",
+            "afterApproving100": "hold 1 created, executed by the market to the buyer, buyer balance 0 -> 100, allowance 100 -> 0"
+          },
+          "approval": {
+            "step": "approve(BerthMarket, 1000) - the ask escrow allowance",
+            "tx": "0x3c21e6fd338b4d24f540469f2e7d85577d804604961aba95d3e9848f00587fba",
+            "result": "SUCCESS",
+            "hashscan": "https://hashscan.io/testnet/transaction/0x3c21e6fd338b4d24f540469f2e7d85577d804604961aba95d3e9848f00587fba"
+          }
+        },
+        "corrections": {
+          "what happened": "ConnectNote first ran against the superseded first-stack venue because .env still held its addresses: it granted the KPI role to, authorised as operator, and created a schedule on the retired CouponScheduler 0xa549... and BerthMarket 0x1163.... Nothing was armed and no value moved.",
+          "mistaken": [
+            {
+              "step": "grantRole (stale venue)",
+              "tx": "0xfc47c8402b7a0cc27d94f40f3247285ef83ffc66d5438e7d1666e7143941b014",
+              "result": "SUCCESS",
+              "hashscan": "https://hashscan.io/testnet/transaction/0xfc47c8402b7a0cc27d94f40f3247285ef83ffc66d5438e7d1666e7143941b014"
+            },
+            {
+              "step": "authorizeOperatorByPartition (stale venue)",
+              "tx": "0x3ef9b8fe43f8859e9a57aa00e8779c9d2c998980c8528cd0634bdedac1eeacf2",
+              "result": "SUCCESS",
+              "hashscan": "https://hashscan.io/testnet/transaction/0x3ef9b8fe43f8859e9a57aa00e8779c9d2c998980c8528cd0634bdedac1eeacf2"
+            },
+            {
+              "step": "createSchedule (stale venue)",
+              "tx": "0x783363f8999ce1a4e54c2b98d4eb4adb7e632bc00dcd063cb6518a4003ac710a",
+              "result": "SUCCESS",
+              "hashscan": "https://hashscan.io/testnet/transaction/0x783363f8999ce1a4e54c2b98d4eb4adb7e632bc00dcd063cb6518a4003ac710a"
+            }
+          ],
+          "undone": [
+            {
+              "step": "revokeRole(ROLE_KPI_MANAGER, stale scheduler)",
+              "tx": "0xb15500fee872c8d9520a50df352d2d9f6b845aa5b4bf524e6a9d6b3cff246964",
+              "result": "SUCCESS",
+              "hashscan": "https://hashscan.io/testnet/transaction/0xb15500fee872c8d9520a50df352d2d9f6b845aa5b4bf524e6a9d6b3cff246964"
+            },
+            {
+              "step": "stale CouponScheduler.cancelSchedule(PLIM-B)",
+              "tx": "0xa71bd94762aeba5a16f701582517e023930956d105768c051b58ddd3087fa6ae",
+              "result": "SUCCESS",
+              "hashscan": "https://hashscan.io/testnet/transaction/0xa71bd94762aeba5a16f701582517e023930956d105768c051b58ddd3087fa6ae"
+            }
+          ],
+          "not undone": [
+            {
+              "step": "revokeOperatorByPartition(stale market)",
+              "tx": "0xea713eb20e94b89b2203a3d4a894c1a2c29d8f7e7de9a59b2d51fb18f7565717",
+              "result": "CONTRACT_REVERT_EXECUTED",
+              "revertData": "0xfc855b1b0000000000000000000000001163e53944536c9f3e171c6d33a060e6bb2106ba",
+              "why": "ATS refuses to revoke an operator that holds no KYC (InvalidKycStatus, 0xfc855b1b + the operator). Inert: the stale market can only escrow after the retired LoadLine clears PLIM-B, which never happens. Left in place pending a decision on KYC-ing a retired contract just to revoke it.",
+              "hashscan": "https://hashscan.io/testnet/transaction/0xea713eb20e94b89b2203a3d4a894c1a2c29d8f7e7de9a59b2d51fb18f7565717"
+            }
+          ]
+        }
+      }
+    }
   },
   "denial_artifact": {
     "what": "A transfer to a blacklisted counterparty, refused by ATS on-chain.",
@@ -165,7 +351,7 @@
     "gasUsed": 74737,
     "revertData": "0x796c1f0d0000000000000000000000005da97170646574339edc856f5c04b99668e27f38",
     "decoded": "AccountIsBlocked(0x5da97170646574339edc856f5c04b99668e27f38)",
-    "confirms": "The error is declared zero-arg in the ATS interface, but the revert appends the ABI-encoded address."
+    "confirms": "0x796c1f0d is the selector of AccountIsBlocked(address), the one-argument form, so the blocked address is a declared parameter ABI-encoded in the revert, not trailing detail. The zero-argument form would be 0xa4dedaeb. ATS does use the other shape elsewhere: refusing to revoke an operator that holds no KYC reverts with the zero-argument InvalidKycStatus() (0xfc855b1b) followed by the address as extra data."
   },
   "preflight_evidence": {
     "what": "The non-reverting check BerthMarket makes before it books any match.",
