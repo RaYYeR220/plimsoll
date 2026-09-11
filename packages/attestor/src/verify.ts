@@ -3,10 +3,14 @@ import type { AnchorRecord } from "./anchor.js";
 import { canonicalHash } from "./canonical.js";
 import {
   attestationFromWire,
+  isLegacyRefusalWire,
+  legacyRefusalFromWire,
   recoverAttestationSigner,
+  recoverLegacyRefusalSigner,
   recoverRefusalSigner,
   refusalFromWire,
 } from "./eip712.js";
+import { CURRENT_FORMAT, KNOWN_FORMATS, V1_ALWAYS_PRESENT, type FormatVersion } from "./format.js";
 import { familyOf, type RefusalReason } from "./reasons.js";
 import { RATIO_BEARING_REASONS } from "./attest.js";
 import type { StoredReceipt } from "./receipts.js";
@@ -17,6 +21,10 @@ import type { StoredReceipt } from "./receipts.js";
  * Nothing in this module needs a credential and nothing in it trusts the
  * service. Every function takes the artifacts a stranger can obtain — a receipt,
  * an anchored record, a mirror-node response — and returns a checkable result.
+ *
+ * Records are verified under the rules of the format they declare. A v1 record
+ * is not rejected for being v1; it is held to what v1 promised, and a record
+ * whose declared version and actual encoding disagree fails.
  */
 
 export interface Check {
@@ -24,10 +32,21 @@ export interface Check {
   label: string;
   passed: boolean;
   detail: string;
+  /**
+   * Passed, but carries something a reader must not miss. Used where a record
+   * is correct under the rules it was written to and those rules were bad.
+   */
+  note?: boolean;
 }
 
-export function check(id: string, label: string, passed: boolean, detail: string): Check {
-  return { id, label, passed, detail };
+export function check(
+  id: string,
+  label: string,
+  passed: boolean,
+  detail: string,
+  note = false,
+): Check {
+  return note ? { id, label, passed, detail, note: true } : { id, label, passed, detail };
 }
 
 /**
@@ -59,8 +78,14 @@ export function recomputeCoverageBps(args: {
   return { attributableValue, obligation, bps: Number(bps) };
 }
 
-/** Verify a stored receipt's own internal consistency. */
-export async function checkReceipt(receipt: StoredReceipt): Promise<Check[]> {
+/**
+ * Verify a stored receipt's own internal consistency, under the rules of the
+ * format its record declares.
+ */
+export async function checkReceipt(
+  receipt: StoredReceipt,
+  version: FormatVersion = CURRENT_FORMAT,
+): Promise<Check[]> {
   const checks: Check[] = [];
 
   if (receipt.evidence) {
@@ -71,7 +96,7 @@ export async function checkReceipt(receipt: StoredReceipt): Promise<Check[]> {
         "sourceHash commits to the stored evidence",
         recomputed === receipt.sourceHash,
         recomputed === receipt.sourceHash
-          ? receipt.sourceHash
+          ? String(receipt.sourceHash)
           : `stored ${receipt.sourceHash} but evidence hashes to ${recomputed}`,
       ),
     );
@@ -86,31 +111,60 @@ export async function checkReceipt(receipt: StoredReceipt): Promise<Check[]> {
     );
   }
 
-  const signerCheck = await checkSignature(receipt);
-  checks.push(signerCheck);
-  checks.push(checkFamilyInvariant(receipt));
-
+  checks.push(await checkSignature(receipt, version));
+  checks.push(checkFamilyInvariant(receipt, version));
   return checks;
 }
 
-async function checkSignature(receipt: StoredReceipt): Promise<Check> {
+/**
+ * The signed payload type is selected by the declared format, never guessed.
+ *
+ * v1 signed every refusal as the single `Refusal` struct; v2 signs
+ * `AssetRefusal` or `EvidenceRefusal`. A payload in the other format's shape is
+ * not an alternative encoding to be tolerated — it means the record's label
+ * does not describe what was signed — so it fails before recovery is attempted.
+ * Attestations are the same struct in both formats.
+ */
+async function checkSignature(receipt: StoredReceipt, version: FormatVersion): Promise<Check> {
+  const label = "EIP-712 signature recovers to the declared attestor";
+  const signature = receipt.signature as Hex;
   try {
-    const recovered =
-      receipt.decision === "attested"
-        ? await recoverAttestationSigner(
-            attestationFromWire(receipt.message),
-            receipt.signature as Hex,
-          )
-        : await recoverRefusalSigner(refusalFromWire(receipt.message), receipt.signature as Hex);
+    let recovered: string;
+    if (receipt.decision === "attested") {
+      recovered = await recoverAttestationSigner(attestationFromWire(receipt.message), signature);
+    } else {
+      const legacyShape = isLegacyRefusalWire(receipt.message);
+      if (version === 1 && !legacyShape) {
+        return check(
+          "signature",
+          label,
+          false,
+          "the record declares format v1, but this refusal is signed over a v2 type " +
+            "(AssetRefusal or EvidenceRefusal); v1 signed refusals as the single Refusal struct",
+        );
+      }
+      if (version !== 1 && legacyShape) {
+        return check(
+          "signature",
+          label,
+          false,
+          `the record declares format v${version}, but this refusal is signed over the ` +
+            "retired v1 Refusal struct",
+        );
+      }
+      recovered = legacyShape
+        ? await recoverLegacyRefusalSigner(legacyRefusalFromWire(receipt.message), signature)
+        : await recoverRefusalSigner(refusalFromWire(receipt.message), signature);
+    }
     const matches = recovered.toLowerCase() === receipt.attestor.toLowerCase();
     return check(
       "signature",
-      "EIP-712 signature recovers to the declared attestor",
+      label,
       matches,
-      matches ? recovered : `recovered ${recovered}, expected ${receipt.attestor}`,
+      matches ? `${recovered} (format v${version})` : `recovered ${recovered}, expected ${receipt.attestor}`,
     );
   } catch (error) {
-    return check("signature", "EIP-712 signature recovers to the declared attestor", false, String(error));
+    return check("signature", label, false, String(error));
   }
 }
 
@@ -125,7 +179,10 @@ async function checkSignature(receipt: StoredReceipt): Promise<Check> {
  * invite someone to rely on it. Only the reasons that are *about* a ratio are
  * required to carry one.
  */
-export function checkFamilyInvariant(receipt: StoredReceipt): Check {
+export function checkFamilyInvariant(
+  receipt: StoredReceipt,
+  version: FormatVersion = CURRENT_FORMAT,
+): Check {
   if (receipt.decision === "attested") {
     return check(
       "family",
@@ -138,7 +195,25 @@ export function checkFamilyInvariant(receipt: StoredReceipt): Check {
   const family = familyOf(reason);
 
   if (family === "evidence") {
-    // null, not zero: an evidence refusal establishes no ratio at all.
+    if (version === 1) {
+      // v1 had no way to say "absent": it wrote a zero and set
+      // coverageKnown=false. That is the defect v2 exists to fix, but it is the
+      // rule this record was written under, so it is the rule applied here —
+      // with the zero called out rather than passed silently.
+      const ok = receipt.coverageKnown === false && receipt.coverageBps === 0;
+      return check(
+        "family",
+        "evidence refusal states no ratio",
+        ok,
+        ok
+          ? "format v1: coverageBps is zeroed and coverageKnown=false marks it meaningless; " +
+              "it is not a coverage reading"
+          : `format v1 zeroed the figure on an evidence refusal, but this receipt has ` +
+              `coverageKnown=${receipt.coverageKnown} and coverageBps=${JSON.stringify(receipt.coverageBps)}`,
+        ok,
+      );
+    }
+    // null, not zero: under v2 an evidence refusal establishes no ratio at all.
     const ok = receipt.coverageKnown === false && receipt.coverageBps === null;
     return check(
       "family",
@@ -166,15 +241,6 @@ export function checkFamilyInvariant(receipt: StoredReceipt): Check {
 }
 
 /**
- * Keys an anchored record must not contain when no ratio was established.
- *
- * This is the negative control for the defect that shipped in the first
- * encoding: an evidence refusal carrying `"bps": 0` is not "no ratio", it is a
- * claim of zero percent coverage, and it is byte-identical in that field to a
- * genuine `no_attributable_positions` finding. Absence is the only unambiguous
- * encoding, so presence alone is a failure regardless of the value.
- */
-/**
  * The ratio we assert, as opposed to the readings a reader may divide.
  *
  * The distinction matters. `val` and `obl` are measured quantities: on an asset
@@ -201,8 +267,13 @@ const EVIDENCE_FORBIDDEN_KEYS = [
 ] as const;
 
 /**
- * An evidence-family record must publish nothing a reader could turn into a
- * coverage figure — not a zero, not an empty string, nothing at all.
+ * The v2 rule: no figure is published where none was established.
+ *
+ * This is the negative control for the defect in the first encoding: an
+ * evidence refusal carrying `"bps": 0` is not "no ratio", it is a claim of zero
+ * percent coverage, byte-identical in that field to a genuine
+ * `no_attributable_positions` finding. Absence is the only unambiguous
+ * encoding, so presence alone is a failure regardless of the value.
  */
 export function checkNoPhantomRatio(record: AnchorRecord): Check {
   const asRecord = record as unknown as Record<string, unknown>;
@@ -226,6 +297,57 @@ export function checkNoPhantomRatio(record: AnchorRecord): Check {
           : "not applicable: a ratio was established"
       : `record contains ${present.map((k) => `${k}=${JSON.stringify(asRecord[k])}`).join(", ")} ` +
         `despite establishing no ratio; a zero here reads as zero percent coverage`,
+  );
+}
+
+/**
+ * Hold a record to the encoding its declared version promises.
+ *
+ * v2 forbids figures that were not established. v1 always wrote the full
+ * numeric block, so a v1-labelled record missing any of it was written by the
+ * v2 encoder under the wrong label and fails; one carrying a zeroed block on a
+ * refusal with no ratio passes, because that is what v1 meant by "unknown",
+ * and is flagged so nobody mistakes the zero for a reading.
+ */
+export function checkEncoding(record: AnchorRecord): Check {
+  const asRecord = record as unknown as Record<string, unknown>;
+  const version = asRecord.v;
+
+  if (version === 2) {
+    const rule = checkNoPhantomRatio(record);
+    return { ...rule, detail: `format v2: ${rule.detail}` };
+  }
+
+  if (version === 1) {
+    const label = "record matches the v1 encoding it declares";
+    const missing = V1_ALWAYS_PRESENT.filter((key) => !(key in asRecord));
+    if (missing.length > 0) {
+      return check(
+        "encoding-v1",
+        label,
+        false,
+        `declares format v1 but omits ${missing.join(", ")}, which the v1 encoder wrote on every ` +
+          "record; this is the v2 encoding under a v1 label",
+      );
+    }
+    const zeroedUnknown = record.d === "refused" && record.known === false;
+    return check(
+      "encoding-v1",
+      label,
+      true,
+      zeroedUnknown
+        ? `format v1: the numeric block is present but zeroed, and known=false marks it meaningless. ` +
+            `v1 had no way to omit a figure; bps=${JSON.stringify(record.bps)} here is not a coverage reading`
+        : "format v1: full numeric block present, as that encoder always wrote it",
+      zeroedUnknown,
+    );
+  }
+
+  return check(
+    "format",
+    "record declares a known format version",
+    false,
+    `unknown format version ${JSON.stringify(version)}; expected one of ${KNOWN_FORMATS.join(", ")}`,
   );
 }
 

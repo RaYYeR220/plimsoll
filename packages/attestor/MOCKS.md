@@ -77,41 +77,59 @@ Everything below runs against live infrastructure and is exercised by the test s
 | HCS-14 UAID | real, with a caveat. Pure offline SHA-384, no dependencies. See the field-ordering note in README limits. |
 | `verify-charge` | real. Zero credentials, public data only. |
 
-## Records on the topic that predate the current encoding
+## Encoding history on the topic
 
 HCS topic `0.0.10451091` has no admin key, so nothing written to it can be
-withdrawn — including our mistakes. Sequences 1 through 11 were written with
-the first anchor encoding, which zeroed numeric fields it did not know. Their
-evidence-family refusal (seq 9) therefore carries `"bps": 0`, a figure that
-reads as zero percent coverage although none was established. The settlements and
-charge claims in those records are accurate; the zeroed fields are not.
+withdrawn, including our mistakes. Every record carries a format version in
+`v`, and `verify-charge` applies the rules of the version a record declares.
 
-Their refusal signatures were made over the retired single `Refusal` EIP-712
-type, which the corrected code no longer defines. That has one visible
-consequence, measured rather than assumed:
+| format | sequences | encoding | refusals signed as |
+| --- | --- | --- | --- |
+| v1 | 1–11 | full numeric block always written, zeroed where unknown | single `Refusal` struct |
+| v1 label, v2 content | 12–16 | figures omitted where not established | `AssetRefusal` / `EvidenceRefusal` |
+| v2 | 17 onward | figures omitted where not established | `AssetRefusal` / `EvidenceRefusal` |
 
-| legacy record | checked from the record alone | checked with our stored receipt |
-| --- | --- | --- |
-| seq 7, attestation | CHARGED AND WARRANTED | CHARGED AND WARRANTED |
-| seq 8, asset refusal | REFUSED AND NOT CHARGED | DISCREPANCY: signature recovers to another address |
-| seq 9, evidence refusal | DISCREPANCY: `bps=0` and eleven other zeroed keys | DISCREPANCY |
+Sequences 12–16 are why the version exists. They were written after the
+encoding changed and before the label did, so nothing in the record told a
+reader which rules to apply. Under the current verifier a v1-labelled record
+must look like the v1 encoder wrote it; where it does not, that is a failure,
+not a variant.
 
-The record-alone column is what a stranger sees, and it is right: the only
-legacy record it convicts is the one whose content is actually wrong. The
-receipt column only arises for us, because the old receipts live in our local,
-gitignored data directory; the signature failure there is the old type meeting
-the new verifier, not a forged record. The `Attestation` type did not change,
-so every legacy attestation still verifies fully.
+### Which v1 records pass the current checks
 
-A further wart, disclosed rather than fixed: both encodings carry `"v": 1`. The
-record therefore cannot say which encoding it uses; the sequence number is the
-discriminator. Bumping the version now would split the corrected records across
-two version labels, which would be more confusing than the collision.
+Measured, not assumed. "Record alone" is what a stranger sees. "With receipt"
+adds our stored off-chain receipts, which exist only in our local, gitignored
+data directory.
 
-They are left in place and disclosed rather than hidden. Sequences 12, 13 and
-14 are the canonical attested, asset-refusal and evidence-refusal records in
-the corrected encoding, and `verify-charge` reports the older evidence refusal
-as a failed check rather than passing it.
+| seq | record | record alone | with receipt |
+| --- | --- | --- | --- |
+| 1, 3, 5, 6, 7, 10 | attestation | CHARGED AND WARRANTED | CHARGED AND WARRANTED (10: receipt not kept) |
+| 2, 4, 8, 11 | asset refusal | REFUSED AND NOT CHARGED | REFUSED AND NOT CHARGED (11: receipt not kept) |
+| 9 | evidence refusal, zeroed | REFUSED AND NOT CHARGED, with a note | REFUSED AND NOT CHARGED, with notes |
+| 12, 15 | attestation, v1 label | CHARGED AND WARRANTED | CHARGED AND WARRANTED |
+| 13, 16 | asset refusal, v1 label | REFUSED AND NOT CHARGED | DISCREPANCY: signed over a v2 type |
+| 14 | evidence refusal, v1 label | DISCREPANCY: v2 encoding under a v1 label | DISCREPANCY |
+
+Three of these deserve a sentence each.
+
+- **Seq 9** carries `"bps": 0` on a refusal that established no ratio. That is
+  how v1 said "unknown", and it is the defect v2 exists to fix. Under v1 rules
+  the record says what it meant, so it passes, but the zero is reported as a
+  note, `not a coverage reading`, and never passed silently. An earlier version
+  of the verifier convicted it outright; applying the rules of the declared
+  format is the more accurate reading, and under v2 the same bytes are a
+  fabrication.
+- **Seq 14** is the one record whose label is contradicted by its own contents:
+  it declares v1 but lacks the numeric block the v1 encoder always wrote. A
+  stranger can see that from the record alone.
+- **Seqs 13 and 16** pass from the record alone because an asset refusal with a
+  known ratio is encoded identically in both formats. Only the signed payload
+  reveals the newer type, so the mislabel shows up only with the receipt.
+
+What v1 recorded about money is accurate throughout: every charged record
+matches a real transfer on the mirror node, and no refusal moved anything. What
+it got wrong was how it wrote down the absence of a number and, for 12–16, what
+it called itself.
 
 ## The seam, in code
 

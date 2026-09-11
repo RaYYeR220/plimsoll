@@ -6,6 +6,9 @@ import {
 import type { AnchorConfig } from "./config.js";
 import type { Verdict } from "./attest.js";
 import { shortHash } from "./canonical.js";
+import { CURRENT_FORMAT, type FormatVersion } from "./format.js";
+
+export { CURRENT_FORMAT, type FormatVersion } from "./format.js";
 
 /**
  * A consensus message is capped at 1024 bytes. The SDK will happily chunk
@@ -15,6 +18,8 @@ import { shortHash } from "./canonical.js";
  * one message and prove it.
  */
 export const HCS_MESSAGE_LIMIT = 1024;
+
+// The format version lives in ./format.ts, shared with the verifier.
 
 /** Raised when a record cannot be made to fit. Never swallowed. */
 export class AnchorTooLarge extends Error {
@@ -51,7 +56,8 @@ export type AnchoredPosition = [string, string, string, number];
 export interface AnchorRecord {
   /** Format discriminator, so a reader can reject anything else on this topic. */
   p: "plimsoll/coverage";
-  v: 1;
+  /** Format version. Selects both the encoding rules and the signed payload type. */
+  v: FormatVersion;
   /** Request id, the join key between this record, the receipt and the charge. */
   rid: string;
   n: string;
@@ -115,7 +121,7 @@ export function buildAnchorRecord(input: AnchorInput): AnchorRecord {
 
   const base: AnchorRecord = {
     p: "plimsoll/coverage",
-    v: 1,
+    v: CURRENT_FORMAT,
     rid: requestId,
     n: verdict.noteId,
     d: verdict.decision,

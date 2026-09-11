@@ -107,6 +107,7 @@ describe("verdict: CHARGED AND WARRANTED", () => {
     assert.equal(result.charged, true);
     assert.equal(result.recomputedBps, 13000, "recomputed independently from the raw readings");
     assert.equal(result.anchoredBps, 13000);
+    assert.ok(result.floorBps !== null, "an attestation always publishes the floor it cleared");
     assert.ok(result.recomputedBps! >= result.floorBps);
     assert.ok(result.checks.every((c) => c.passed), JSON.stringify(result.checks.filter((c) => !c.passed)));
     assert.match(result.links.settlement ?? "", /hashscan.io/);
@@ -316,6 +317,34 @@ describe("verdict: DISCREPANCY", () => {
 });
 
 describe("the verifier needs no credentials", () => {
+  it("verifies a figureless evidence refusal from the anchored record alone", async () => {
+    // The stranger's path: no receipt, only the public record. An evidence
+    // refusal carries no floor and no ratio, and this once crashed on a null
+    // receipt because it assumed one of the two sources would supply a floor.
+    const verdict = await attest("NOTE-INDIA", { source, signer });
+    const anchor = buildAnchorRecord({ requestId: "cccc000000000001", verdict, charge: null });
+    assert.equal("floor" in anchor, false);
+    publishToTopic(21, anchor);
+
+    const result = await verifyCharge(args({ hcs: { topicId: "0.0.10451091", sequenceNumber: 21 } }));
+    assert.equal(result.verdict, "REFUSED AND NOT CHARGED");
+    assert.equal(result.floorBps, null, "no floor is reported where none was published");
+    assert.equal(result.anchoredBps, null);
+    assert.ok(result.checks.every((c) => c.passed), JSON.stringify(result.checks.filter((c) => !c.passed)));
+  });
+
+  it("convicts a v1-labelled record in the v2 encoding from the record alone", async () => {
+    const verdict = await attest("NOTE-INDIA", { source, signer });
+    const anchor = { ...buildAnchorRecord({ requestId: "cccc000000000002", verdict, charge: null }), v: 1 };
+    publishToTopic(22, anchor as AnchorRecord);
+
+    const result = await verifyCharge(args({ hcs: { topicId: "0.0.10451091", sequenceNumber: 22 } }));
+    assert.equal(result.verdict, "DISCREPANCY");
+    const encoding = result.checks.find((c) => c.id === "encoding-v1")!;
+    assert.equal(encoding.passed, false);
+    assert.match(encoding.detail, /v2 encoding under a v1 label/);
+  });
+
   it("refuses to guess when there is nothing to check", async () => {
     await assert.rejects(
       () => verifyCharge(args({ requestId: "ffffffffffffffff" })),

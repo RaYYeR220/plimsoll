@@ -155,7 +155,7 @@ node, recomputes the coverage ratio with its own arithmetic, asks the ledger wha
 and prints a verdict.
 
 ```
-node dist/bin/verify-charge.js --hcs 0.0.10451091:12 --explain
+node dist/bin/verify-charge.js --hcs 0.0.10451091:17 --explain
 node dist/bin/verify-charge.js --request <requestId> --from https://<host> --explain
 ```
 
@@ -198,25 +198,36 @@ signs only `noteId, reason, expiry, nonce`. The primary type is hashed into the
 digest, so an evidence refusal's signature re-presented as an asset refusal
 reporting zero coverage recovers to a different address.
 
-### Canonical records, and the ones before them
+### Format versions, and the records before them
 
-The topic is immutable, so earlier records stay where they are. **Sequences 1–11
-use the first encoding**, in which evidence refusals carried zeroed numeric
-fields (seq 9, `source_unavailable`, has `"bps": 0`). That encoding was wrong
-for the reason above and was replaced; the current `verify-charge` flags such a
-record with `no coverage figure is published where none was established`.
-Checked from the record alone, as a stranger would, seq 9 is the only legacy
-record that fails; the legacy attestations and asset refusals still verify.
-MOCKS.md has the per-record results, including the one case where our own old
-receipts no longer match the corrected signature types.
+Every record declares its format in `v`, and the verifier applies the rules of
+the version the record declares: which payload type its signature must be over,
+and which keys it may or must carry. A record whose declared version and actual
+encoding disagree fails.
 
-The canonical records, in the current encoding:
+- **v1, sequences 1–16.** The v1 encoder always wrote the full numeric block,
+  zeroing what it did not know, and signed refusals as a single `Refusal`
+  struct. Sequences 12–16 were written after the omission encoding and the split
+  signature types landed but before the version changed, so they are v2 content
+  under a v1 label.
+- **v2, from sequence 17.** Figures are omitted, never zeroed, and refusals are
+  signed as `AssetRefusal` or `EvidenceRefusal`.
+
+The topic is immutable, so the v1 records stay where they are and remain
+checkable under v1 rules. Checked from the public record alone, every v1 record
+passes except seq 14, the one whose v1 label is contradicted by the record
+itself. Seq 9, the zeroed evidence refusal, passes under the rules it was
+written to, with the zero reported as not a coverage reading. MOCKS.md has the
+per-record results, including the mislabels that only our stored receipts
+expose.
+
+Canonical records, format v2:
 
 | case | HCS seq | bytes | settlement |
 | --- | --- | --- | --- |
-| attested, NOTE-ALPHA, 13000 bps | 12 | 843 | `0.0.7162784@1789036743.662497323` |
-| asset refusal, NOTE-BRAVO, 8700 bps | 13 | 832 | none |
-| evidence refusal, NOTE-INDIA, `source_unavailable` | 14 | 365 | none |
+| attested, NOTE-ALPHA, 13000 bps | 17 | 843 | `0.0.7162784@1789121899.540907773` |
+| asset refusal, NOTE-BRAVO, 8700 bps | 18 | 832 | none |
+| evidence refusal, NOTE-INDIA, `source_unavailable` | 19 | 365 | none |
 
 ## Honest limits
 

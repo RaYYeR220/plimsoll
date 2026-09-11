@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { AnchorRecord } from "../src/anchor.js";
+import { CURRENT_FORMAT, type FormatVersion } from "../src/format.js";
 import {
   MirrorClient,
   hashscanTopic,
@@ -16,7 +17,7 @@ import {
   type Check,
   check,
   checkAnchorBinding,
-  checkNoPhantomRatio,
+  checkEncoding,
   checkReceipt,
   recomputeCoverageBps,
 } from "../src/verify.js";
@@ -106,9 +107,11 @@ export interface VerificationResult {
   family: string | null;
   anchoredBps: number | null;
   recomputedBps: number | null;
-  floorBps: number;
+  floorBps: number | null;
   charged: boolean;
   settlementTxId: string | null;
+  /** Format version the record declares, which selected the rules applied. */
+  format: unknown;
   checks: Check[];
   links: Record<string, string>;
 }
@@ -161,17 +164,27 @@ export async function verifyCharge(args: Args): Promise<VerificationResult> {
   // service cannot quietly rewrite.
   const decision = record?.d ?? receipt!.decision;
   const noteId = record?.n ?? receipt!.noteId;
-  const floorBps = record?.floor ?? receipt!.evidence?.floorBps ?? 0;
+  // A record that established no ratio carries no floor either, and the
+  // stranger's path has no receipt to fall back on, so absence must survive
+  // here as null rather than being dereferenced or defaulted to a number.
+  const floorBps = record?.floor ?? receipt?.evidence?.floorBps ?? null;
   // null means no ratio was ever established, which is different from zero.
   const anchoredBps = record?.bps ?? receipt?.coverageBps ?? null;
   const claimedCharge = record ? record.chg : receipt!.chargeTransactionId !== null;
   const settlementTxId = record?.tx ?? receipt?.chargeTransactionId ?? null;
   const family = record?.fam ?? receipt?.family ?? null;
 
-  if (receipt) checks.push(...(await checkReceipt(receipt)));
-  // Run before anything reads a figure off the record, so a phantom ratio is
-  // reported as the encoding fault it is rather than as an arithmetic mismatch.
-  if (record) checks.push(checkNoPhantomRatio(record));
+  // The declared version selects the rules: which payload type the signature
+  // must be over, and which keys the record may or must carry. The anchored
+  // copy is preferred because the service cannot rewrite it.
+  const encodingSubject = record ?? receipt?.anchorRecord ?? null;
+  const declaredFormat = (encodingSubject as { v?: unknown } | null)?.v ?? CURRENT_FORMAT;
+  const format: FormatVersion = declaredFormat === 1 ? 1 : 2;
+
+  if (receipt) checks.push(...(await checkReceipt(receipt, format)));
+  // Run before anything reads a figure off the record, so an encoding fault is
+  // reported as what it is rather than as an arithmetic mismatch.
+  if (encodingSubject) checks.push(checkEncoding(encodingSubject));
   if (record && receipt) checks.push(...checkAnchorBinding(record, receipt));
   if (record && !receipt) {
     checks.push(
@@ -328,7 +341,8 @@ export async function verifyCharge(args: Args): Promise<VerificationResult> {
   }
 
   // --- the biconditional ----------------------------------------------------
-  const warranted = decision === "attested" && recomputedBps !== null && recomputedBps >= floorBps;
+  const warranted =
+    decision === "attested" && recomputedBps !== null && floorBps !== null && recomputedBps >= floorBps;
   const chargeMatchesWarrant = claimedCharge === (decision === "attested");
   checks.push(check("biconditional", "charge present if and only if an attestation was warranted",
     chargeMatchesWarrant && (!claimedCharge || warranted),
@@ -361,6 +375,7 @@ export async function verifyCharge(args: Args): Promise<VerificationResult> {
     floorBps,
     charged: claimedCharge,
     settlementTxId,
+    format: declaredFormat,
     checks,
     links,
   };
@@ -398,20 +413,20 @@ export class NotEnoughEvidence extends Error {
 function render(result: VerificationResult, explain: boolean): string {
   const lines: string[] = [];
   lines.push("");
-  lines.push(`  request ${result.requestId}   note ${result.noteId}`);
+  lines.push(`  request ${result.requestId}   note ${result.noteId}   format v${String(result.format)}`);
   lines.push(
     `  decision: ${result.decision}${result.reason ? `  (${result.family} / ${result.reason})` : ""}`,
   );
   lines.push("");
   for (const c of result.checks) {
-    lines.push(`  ${c.passed ? "ok  " : "FAIL"}  ${c.label}`);
+    lines.push(`  ${c.passed ? (c.note ? "note" : "ok  ") : "FAIL"}  ${c.label}`);
     lines.push(`        ${c.detail}`);
   }
   lines.push("");
   if (explain) {
-    lines.push(`  anchored ratio    ${result.anchoredBps} bps`);
-    lines.push(`  recomputed ratio  ${result.recomputedBps ?? "not applicable"} bps`);
-    lines.push(`  load line         ${result.floorBps} bps`);
+    lines.push(`  anchored ratio    ${result.anchoredBps === null ? "none established" : `${result.anchoredBps} bps`}`);
+    lines.push(`  recomputed ratio  ${result.recomputedBps === null ? "not applicable" : `${result.recomputedBps} bps`}`);
+    lines.push(`  load line         ${result.floorBps === null ? "not applicable" : `${result.floorBps} bps`}`);
     lines.push(`  charged           ${result.charged ? "yes" : "no"}`);
     lines.push("");
   }

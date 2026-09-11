@@ -187,6 +187,75 @@ export function recoverRefusalSigner(message: RefusalMessage, signature: Hex): P
   return recoverTypedDataAddress({ ...refusalTypedData(message), signature } as never);
 }
 
+/**
+ * The retired single refusal type, as signed by format v1.
+ *
+ * Nothing signs with it any more. It is kept because the topic is immutable:
+ * the v1 records on it were signed over this struct, and a verifier that forgot
+ * the struct would report every historical refusal as forged. Field order is
+ * part of the typeHash, so it is reproduced exactly as it was.
+ */
+export const LEGACY_REFUSAL_TYPES = {
+  Refusal: [
+    { name: "noteId", type: "string" },
+    { name: "family", type: "uint8" },
+    { name: "reason", type: "string" },
+    { name: "coverageKnown", type: "bool" },
+    { name: "coverageBps", type: "uint32" },
+    { name: "asOfBlock", type: "uint64" },
+    { name: "vaultSetHash", type: "bytes32" },
+    { name: "sourceHash", type: "bytes32" },
+    { name: "expiry", type: "uint64" },
+    { name: "nonce", type: "bytes32" },
+  ],
+} as const;
+
+export interface LegacyRefusalMessage {
+  noteId: string;
+  family: number;
+  reason: RefusalReason;
+  coverageKnown: boolean;
+  coverageBps: number;
+  asOfBlock: bigint;
+  vaultSetHash: Hex;
+  sourceHash: Hex;
+  expiry: bigint;
+  nonce: Hex;
+}
+
+/** The legacy payload is the only one that carries a numeric `family` field. */
+export function isLegacyRefusalWire(w: Record<string, unknown>): boolean {
+  return "family" in w;
+}
+
+export function legacyRefusalFromWire(w: Record<string, unknown>): LegacyRefusalMessage {
+  return {
+    noteId: String(w.noteId),
+    family: Number(w.family),
+    reason: String(w.reason) as RefusalReason,
+    coverageKnown: Boolean(w.coverageKnown),
+    coverageBps: Number(w.coverageBps),
+    asOfBlock: BigInt(String(w.asOfBlock)),
+    vaultSetHash: w.vaultSetHash as Hex,
+    sourceHash: w.sourceHash as Hex,
+    expiry: BigInt(String(w.expiry)),
+    nonce: w.nonce as Hex,
+  };
+}
+
+export function recoverLegacyRefusalSigner(
+  message: LegacyRefusalMessage,
+  signature: Hex,
+): Promise<Address> {
+  return recoverTypedDataAddress({
+    domain: ATTESTOR_DOMAIN,
+    types: LEGACY_REFUSAL_TYPES,
+    primaryType: "Refusal",
+    message,
+    signature,
+  });
+}
+
 /** Wire form: bigints become decimal strings so a verdict survives JSON intact. */
 export function attestationToWire(m: AttestationMessage): Record<string, unknown> {
   return { ...m, asOfBlock: m.asOfBlock.toString(), expiry: m.expiry.toString() };

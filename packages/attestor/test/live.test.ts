@@ -193,6 +193,7 @@ describe("live: HCS anchoring", () => {
         assert.ok(decoded.length <= HCS_MESSAGE_LIMIT, `${decoded.length} bytes exceeds the limit`);
         const record = JSON.parse(decoded.toString("utf8"));
         assert.equal(record.p, "plimsoll/coverage");
+        assert.equal(record.v, 2, "new records declare format v2");
         assert.equal(record.rid, requestId);
         assert.equal(record.chg, requestId === attested.requestId);
       }
