@@ -51,6 +51,7 @@ contract MandateVerifier {
     error MarketNotHalted();
     error ValueOutOfRange();
     error NoAuthority();
+    error NotGatekeeper(address caller);
 
     event MarketHalted(
         bytes32 indexed marketKey, string market, uint32 coverageBps, uint32 loadLineBps, uint64 nonce
@@ -64,6 +65,16 @@ contract MandateVerifier {
 
     /// @notice The only key whose approval counts. Immutable: there is no path that escalates it.
     address public immutable authority;
+
+    /// @notice The only contract allowed to execute a mandate: whoever deployed this verifier.
+    /// @dev    Taken from `msg.sender` at construction rather than set afterwards, because a setter
+    ///         left open between two transactions is itself something to race. In Plimsoll the
+    ///         deployer is MandateVerifierAdapter, which accepts calls only from LoadLine, so the one
+    ///         path that can consume a mandate is the one that also moves the load line, in the same
+    ///         transaction. Without it, a signed mandate lifted in flight could be spent here
+    ///         directly: its nonce burns, the market's own copy of the halt never changes, and the
+    ///         legitimate submission reverts. The human halts; the market keeps trading.
+    address public immutable gatekeeper;
 
     /// @notice Nonces are single-use across every market and every action.
     mapping(uint64 => bool) public nonceUsed;
@@ -85,6 +96,7 @@ contract MandateVerifier {
     constructor(address authority_) {
         if (authority_ == address(0)) revert NoAuthority();
         authority = authority_;
+        gatekeeper = msg.sender;
     }
 
     // --- privileged entrypoints -------------------------------------------------------------
@@ -184,6 +196,9 @@ contract MandateVerifier {
         private
         returns (bytes32 key)
     {
+        // Before anything else: a valid signature presented through the wrong door is refused
+        // without touching the nonce, so the approval survives to be used through the right one.
+        if (msg.sender != gatekeeper) revert NotGatekeeper(msg.sender);
         if (mandate.action != expected) revert WrongAction(mandate.action, expected);
         // The expiry is a wall-clock deadline the human read off the device. block.timestamp is
         // the only clock available here and a few seconds of validator drift is meaningless

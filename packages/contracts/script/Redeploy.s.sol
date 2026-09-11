@@ -36,11 +36,14 @@ contract RedeployAuthority is Script {
         CoverageOracle oracle = CoverageOracle(vm.envAddress("COVERAGE_ORACLE"));
         string memory market = vm.envString("NOTE_MARKET");
 
+        address predictedLoadLine = vm.computeCreateAddress(deployer, vm.getNonce(deployer) + 1);
+
         vm.startBroadcast(deployerKey);
 
-        MandateVerifier verifier = new MandateVerifier(deviceSigner);
-        MandateVerifierAdapter adapter = new MandateVerifierAdapter(verifier);
+        MandateVerifierAdapter adapter = new MandateVerifierAdapter(deviceSigner, predictedLoadLine);
+        MandateVerifier verifier = adapter.verifier();
         LoadLine loadLine = new LoadLine(IMandateAuthority(address(adapter)), owner);
+        require(address(loadLine) == predictedLoadLine, "LoadLine landed where the adapter does not look");
         CashLegController cashController = new CashLegController(ILoadLine(address(loadLine)), owner);
 
         oracle.setLoadLine(ILoadLine(address(loadLine)));

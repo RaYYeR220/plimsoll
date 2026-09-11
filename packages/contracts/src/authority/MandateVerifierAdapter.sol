@@ -29,6 +29,13 @@ import { MandateVerifier } from "./MandateVerifier.sol";
  *      characters - is what makes that injection impossible, and {registerMarket} runs a code
  *      through the verifier's own validator before this contract will ever bind it to a note.
  *
+ *      **There is one door, and it is LoadLine.** This adapter carries mandates only for the
+ *      LoadLine it was built around, and it creates its own verifier, which records this adapter as
+ *      its sole caller at birth. A correctly signed mandate submitted straight to the verifier, or
+ *      straight to this adapter, is refused before its nonce is touched. That matters because
+ *      either door would otherwise let a mandate be spent without LoadLine's state moving with it -
+ *      and for a halt, that fails open.
+ *
  *      **The value is bound, not just the action.** A threshold mandate carries the load line
  *      the human read on the device. {LoadLine} passes the number it is about to write, and this
  *      adapter reverts with {MandateValueMismatch} unless the two are identical - before the
@@ -44,11 +51,14 @@ contract MandateVerifierAdapter is IMandateAuthority {
     bytes32 public constant ACTION_RESUME = keccak256("PLIMSOLL_LOADLINE_RESUME");
 
     MandateVerifier public immutable verifier;
+    /// @notice The only caller whose mandates this adapter will carry.
+    address public immutable loadLine;
 
     /// @notice noteId (the market-code hash) to the human-readable code the device displays.
     mapping(bytes32 => string) private _marketOf;
 
     error ZeroAddress();
+    error NotLoadLine(address caller);
     error UnsupportedAction(bytes32 action);
     error MarketMismatch(bytes32 subject, bytes32 mandateMarketKey);
     error MarketNotRegistered(bytes32 subject);
@@ -58,9 +68,17 @@ contract MandateVerifierAdapter is IMandateAuthority {
 
     event MarketRegistered(bytes32 indexed noteId, string market);
 
-    constructor(MandateVerifier verifier_) {
-        if (address(verifier_) == address(0)) revert ZeroAddress();
-        verifier = verifier_;
+    /**
+     * @param authority_ The device key the verifier will trust.
+     * @param loadLine_  The LoadLine this adapter serves, and the only caller it accepts.
+     * @dev The verifier is created here rather than passed in, so it records this adapter as its
+     *      sole caller in the same transaction that creates it. Neither contract ever exists in a
+     *      state where it answers to anyone else, and there is no setter to race.
+     */
+    constructor(address authority_, address loadLine_) {
+        if (authority_ == address(0) || loadLine_ == address(0)) revert ZeroAddress();
+        loadLine = loadLine_;
+        verifier = new MandateVerifier(authority_);
     }
 
     /**
@@ -86,6 +104,7 @@ contract MandateVerifierAdapter is IMandateAuthority {
 
     /// @inheritdoc IMandateAuthority
     function requireMandate(bytes32 action, bytes32 subject, uint256 value, bytes calldata proof) external {
+        if (msg.sender != loadLine) revert NotLoadLine(msg.sender);
         (MandateVerifier.Mandate memory mandate, bytes memory signature) = abi.decode(
             proof,
             (MandateVerifier.Mandate, bytes)

@@ -29,12 +29,19 @@ contract DeployCore is Script {
         address owner = vm.envOr("OWNER", deployer);
         address authoritySigner = vm.envAddress("MANDATE_AUTHORITY_SIGNER");
 
+        // The adapter must know LoadLine's address and LoadLine must be born with a live authority,
+        // so LoadLine's address is predicted from the deployer's nonce: adapter, oracle, then LoadLine.
+        // If the prediction were ever wrong the adapter would trust an empty address and refuse every
+        // mandate - it fails closed - and the require below stops the script before that ships.
+        address predictedLoadLine = vm.computeCreateAddress(deployer, vm.getNonce(deployer) + 2);
+
         vm.startBroadcast(deployerKey);
 
-        MandateVerifier verifier = new MandateVerifier(authoritySigner);
-        MandateVerifierAdapter adapter = new MandateVerifierAdapter(verifier);
+        MandateVerifierAdapter adapter = new MandateVerifierAdapter(authoritySigner, predictedLoadLine);
+        MandateVerifier verifier = adapter.verifier();
         CoverageOracle oracle = new CoverageOracle(owner);
         LoadLine loadLine = new LoadLine(IMandateAuthority(address(adapter)), owner);
+        require(address(loadLine) == predictedLoadLine, "LoadLine landed where the adapter does not look");
         CashLegController cashController = new CashLegController(ILoadLine(address(loadLine)), owner);
 
         // Only the owner may wire these, so this works only while the deployer still is the owner.

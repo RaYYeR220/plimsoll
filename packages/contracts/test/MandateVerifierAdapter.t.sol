@@ -9,6 +9,7 @@ import { CoverageOracle } from "../src/CoverageOracle.sol";
 import { Coverage } from "../src/libraries/Coverage.sol";
 import { ICoverageOracle, ILoadLine } from "../src/interfaces/IPlimsoll.sol";
 import { IMandateAuthority } from "../src/interfaces/IMandateAuthority.sol";
+import { MockMandateAuthority } from "./mocks/Mocks.sol";
 
 /**
  * @notice The seam between the load line and a human holding a hardware device.
@@ -34,9 +35,13 @@ contract MandateVerifierAdapterTest is Test {
 
     function setUp() public {
         authoritySigner = vm.addr(authorityKey);
-        verifier = new MandateVerifier(authoritySigner);
-        adapter = new MandateVerifierAdapter(verifier);
-        loadLine = new LoadLine(IMandateAuthority(address(adapter)), address(this));
+        // The live order: LoadLine exists first, the adapter is built around it and creates its
+        // own verifier, and the owner then repoints LoadLine at the adapter.
+        MockMandateAuthority placeholder = new MockMandateAuthority();
+        loadLine = new LoadLine(IMandateAuthority(address(placeholder)), address(this));
+        adapter = new MandateVerifierAdapter(authoritySigner, address(loadLine));
+        verifier = adapter.verifier();
+        loadLine.setMandateAuthority(IMandateAuthority(address(adapter)));
         oracle = new CoverageOracle(address(this));
 
         loadLine.setOracle(ICoverageOracle(address(oracle)));
@@ -51,7 +56,16 @@ contract MandateVerifierAdapterTest is Test {
         uint32 coverageBps,
         uint32 loadLineBps
     ) internal returns (bytes memory proof) {
-        MandateVerifier.Mandate memory m = MandateVerifier.Mandate({
+        (MandateVerifier.Mandate memory m, bytes memory signature) = _signed(action, coverageBps, loadLineBps);
+        return abi.encode(m, signature);
+    }
+
+    function _signed(
+        MandateVerifier.Action action,
+        uint32 coverageBps,
+        uint32 loadLineBps
+    ) internal returns (MandateVerifier.Mandate memory m, bytes memory signature) {
+        m = MandateVerifier.Mandate({
             action: action,
             market: MARKET,
             coverageBps: coverageBps,
@@ -61,7 +75,7 @@ contract MandateVerifierAdapterTest is Test {
         });
         bytes32 digest = verifier.mandateDigest(m);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(authorityKey, digest);
-        return abi.encode(m, abi.encodePacked(r, s, v));
+        signature = abi.encodePacked(r, s, v);
     }
 
     // ------------------------------------------------------------------ market codes
@@ -229,7 +243,108 @@ contract MandateVerifierAdapterTest is Test {
 
         // Deployment administration is owner-gated and must never resolve to a mandate action.
         vm.expectRevert(abi.encodeWithSelector(MandateVerifierAdapter.UnsupportedAction.selector, stray));
+        vm.prank(address(loadLine));
         adapter.requireMandate(stray, noteId, 0, proof);
+    }
+
+    // ------------------------------------------------------------------ one door only
+
+    function test_EachHopIsLockedToTheNext() public view {
+        assertEq(verifier.gatekeeper(), address(adapter), "the verifier answers only to its adapter");
+        assertEq(adapter.loadLine(), address(loadLine), "the adapter answers only to LoadLine");
+        assertEq(address(loadLine.mandateAuthority()), address(adapter));
+    }
+
+    /**
+     * @notice A valid human approval, applied through the wrong door, is refused.
+     * @dev Straight to the verifier: refused before the nonce is touched, so the same approval still
+     *      lands through LoadLine, and LoadLine and the verifier end up agreeing.
+     */
+    function test_RevertWhen_ValidMandateIsSubmittedDirectlyToTheVerifier() public {
+        loadLine.setThreshold(noteId, 9_500, _mandate(MandateVerifier.Action.SET_THRESHOLD, 13_000, 9_500));
+        (MandateVerifier.Mandate memory m, bytes memory sig) = _signed(MandateVerifier.Action.HALT, 9_100, 9_500);
+
+        vm.prank(outsider);
+        vm.expectRevert(abi.encodeWithSelector(MandateVerifier.NotGatekeeper.selector, outsider));
+        verifier.haltMarket(m, sig);
+
+        assertFalse(verifier.nonceUsed(m.nonce), "the refused attempt burned nothing");
+        assertFalse(verifier.isHalted(MARKET));
+
+        loadLine.halt(noteId, abi.encode(m, sig));
+        assertTrue(loadLine.isHalted(noteId));
+        assertTrue(verifier.isHalted(MARKET), "and both sides moved together");
+    }
+
+    /// @notice Straight to the adapter: refused the same way, for the same reason.
+    function test_RevertWhen_ValidMandateIsSubmittedDirectlyToTheAdapter() public {
+        loadLine.setThreshold(noteId, 9_500, _mandate(MandateVerifier.Action.SET_THRESHOLD, 13_000, 9_500));
+        (MandateVerifier.Mandate memory m, bytes memory sig) = _signed(MandateVerifier.Action.HALT, 9_100, 9_500);
+        bytes memory proof = abi.encode(m, sig);
+        bytes32 haltAction = adapter.ACTION_HALT();
+
+        vm.prank(outsider);
+        vm.expectRevert(abi.encodeWithSelector(MandateVerifierAdapter.NotLoadLine.selector, outsider));
+        adapter.requireMandate(haltAction, noteId, 0, proof);
+
+        assertFalse(verifier.nonceUsed(m.nonce));
+        loadLine.halt(noteId, proof);
+        assertTrue(loadLine.isHalted(noteId));
+        assertTrue(verifier.isHalted(MARKET));
+    }
+
+    function test_RevertWhen_ThresholdMandateIsSubmittedThroughEitherWrongDoor() public {
+        (MandateVerifier.Mandate memory m, bytes memory sig) =
+            _signed(MandateVerifier.Action.SET_THRESHOLD, 13_000, 9_500);
+        bytes32 setAction = adapter.ACTION_SET_THRESHOLD();
+
+        vm.prank(outsider);
+        vm.expectRevert(abi.encodeWithSelector(MandateVerifier.NotGatekeeper.selector, outsider));
+        verifier.setCoverageThreshold(m, sig);
+
+        vm.prank(outsider);
+        vm.expectRevert(abi.encodeWithSelector(MandateVerifierAdapter.NotLoadLine.selector, outsider));
+        adapter.requireMandate(setAction, noteId, 9_500, abi.encode(m, sig));
+
+        loadLine.setThreshold(noteId, 9_500, abi.encode(m, sig));
+        (uint64 line, ) = loadLine.lineOf(noteId);
+        assertEq(line, 9_500);
+    }
+
+    /**
+     * @notice No caller other than LoadLine can change halt or threshold state.
+     * @dev Any address, holding a correctly signed mandate for either fail-open action, is refused
+     *      at both hops - and afterwards LoadLine and the verifier still agree exactly.
+     */
+    function test_Fuzz_NoCallerButLoadLineCanMoveHaltOrThreshold(address caller, bool halt, uint32 newLine) public {
+        vm.assume(caller != address(loadLine) && caller != address(adapter));
+        newLine = uint32(bound(newLine, 1, 99_999));
+        loadLine.setThreshold(noteId, 9_500, _mandate(MandateVerifier.Action.SET_THRESHOLD, 13_000, 9_500));
+
+        (MandateVerifier.Mandate memory m, bytes memory sig) = halt
+            ? _signed(MandateVerifier.Action.HALT, 9_100, 9_500)
+            : _signed(MandateVerifier.Action.SET_THRESHOLD, 13_000, newLine);
+        bytes32 action = halt ? adapter.ACTION_HALT() : adapter.ACTION_SET_THRESHOLD();
+
+        vm.prank(caller);
+        (bool okVerifier, ) = address(verifier).call(
+            halt
+                ? abi.encodeCall(MandateVerifier.haltMarket, (m, sig))
+                : abi.encodeCall(MandateVerifier.setCoverageThreshold, (m, sig))
+        );
+        assertFalse(okVerifier, "the verifier took a mandate from someone other than its adapter");
+
+        vm.prank(caller);
+        (bool okAdapter, ) = address(adapter).call(
+            abi.encodeCall(MandateVerifierAdapter.requireMandate, (action, noteId, halt ? 0 : newLine, abi.encode(m, sig)))
+        );
+        assertFalse(okAdapter, "the adapter took a mandate from someone other than LoadLine");
+
+        assertFalse(verifier.nonceUsed(m.nonce), "a refused door burned a nonce");
+        assertEq(loadLine.isHalted(noteId), verifier.isHalted(MARKET), "halt state diverged");
+        (uint64 line, ) = loadLine.lineOf(noteId);
+        assertEq(line, verifier.marketState(MARKET).loadLineBps, "threshold diverged");
+        assertEq(line, 9_500);
     }
 
     // ------------------------------------------------------------------ reconciliation

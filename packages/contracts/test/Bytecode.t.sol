@@ -27,9 +27,9 @@ contract BytecodeSizeTest is Base {
     }
 
     function test_EveryDeployedContractFitsUnderEip170() public {
-        MandateVerifier verifier = new MandateVerifier(address(this));
-        _check("MandateVerifier", address(verifier));
-        _check("MandateVerifierAdapter", address(new MandateVerifierAdapter(verifier)));
+        MandateVerifierAdapter adapter = new MandateVerifierAdapter(address(this), address(loadLine));
+        _check("MandateVerifier", address(adapter.verifier()));
+        _check("MandateVerifierAdapter", address(adapter));
         _check("CoverageOracle", address(oracle));
         _check("LoadLine", address(loadLine));
         _check("BerthMarket", address(market));
@@ -38,9 +38,9 @@ contract BytecodeSizeTest is Base {
     }
 
     function test_ReportSizes() public {
-        MandateVerifier verifier = new MandateVerifier(address(this));
-        console_log("MandateVerifier", address(verifier).code.length);
-        console_log("MandateVerifierAdapter", address(new MandateVerifierAdapter(verifier)).code.length);
+        MandateVerifierAdapter adapter = new MandateVerifierAdapter(address(this), address(loadLine));
+        console_log("MandateVerifier", address(adapter.verifier()).code.length);
+        console_log("MandateVerifierAdapter", address(adapter).code.length);
         console_log("CoverageOracle", address(oracle).code.length);
         console_log("LoadLine", address(loadLine).code.length);
         console_log("BerthMarket", address(market).code.length);
