@@ -3,10 +3,10 @@ import styles from '@/components/app/app.module.css';
 import screens from '../screens.module.css';
 
 /**
- * The topic is the attestation service's record, and every figure on it so far comes from
- * fixture backing — including the two records that name the real notes. The register says
- * so row by row, because a judge who opens the topic will find "PLIM-B attested, 150%" and
- * needs to know what that was before reading anything into it.
+ * The topic is the attestation service's record. Records 25 and 26 are the notes' real
+ * history, read live; the fixture records before them stay where they are, labelled row
+ * by row, because a judge who opens the topic will also find "PLIM-B attested, 150%" at
+ * record 22 and needs to know what that was before reading anything into it.
  */
 export default function AuditPage() {
   const markets = notes.map((n) => n.market).join(' and ');
@@ -42,11 +42,11 @@ export default function AuditPage() {
       <section className={styles.panel} data-family="evidence">
         <h2>What these records are</h2>
         <p className={styles.panelNote}>
-          Records 22 and 23 name {markets}, and they prove the path end to end on the real notes: the encoding, the
-          signature, the charge on an attestation and the absence of one on a refusal. Their backing is not the notes’
-          backing. Each says so itself — the feed is a fixture, the positions are invented, and the vault set is the
-          placeholder that setVaultSet has since replaced. Records 17 to 19 are the service’s own test notes. The first
-          reading of the notes’ registered vaults on Base will be a new record, and it will appear here.
+          Records 25 and 26 are the real history of {markets}: each was read live from the note’s registered vaults on
+          Base. PLIM-B was attested and charged; PLIM-A was refused and not charged, $1.000000 against $1,000,000.00.
+          Records 22 to 24 came before the vault sets were registered and are fixtures — their positions are invented
+          and they say so themselves. Records 17 to 19 are the service’s own test notes. Every record declares its own
+          feed, so nothing here depends on taking our word for which is which.
         </p>
       </section>
 
@@ -127,7 +127,7 @@ export default function AuditPage() {
             from the public mirror node, recomputes the ratio with its own arithmetic, asks the ledger what moved, and
             prints a verdict.
           </p>
-          <p className={screens.command}>node dist/bin/verify-charge.js --hcs {site.auditTopic.id}:18 --explain</p>
+          <p className={screens.command}>node dist/bin/verify-charge.js --hcs {site.auditTopic.id}:25 --explain</p>
           <ul className={styles.rows}>
             <li>
               <span className="k">Charged and warranted</span>
@@ -166,8 +166,8 @@ export default function AuditPage() {
               <span className="v">v3 from record 22</span>
               <span className="sub">
                 The version selects the verification rules, so a record is always checked under the rules it was written
-                with. Version 3 also names the feed and the oracle it reports to, which is how records 22 and 23 declare
-                their fixture backing.
+                with. Version 3 also names the feed and the oracle it reports to, which is how records 25 and 26 declare
+                a live reading and 22 to 24 a fixture.
               </span>
             </li>
             <li>

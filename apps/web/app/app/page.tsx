@@ -14,7 +14,7 @@ export default function MarketPage() {
     slug: n.market.toLowerCase(),
     obligation: n.obligation,
     negativeControl: n.negativeControl,
-    plannedBackingUsd: n.plannedBackingUsd,
+    fundedBackingUsd: n.positions?.totalUsd,
     hederaId: n.hederaId,
     href: n.href,
     recorded: n.recorded,

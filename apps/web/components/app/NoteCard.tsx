@@ -14,7 +14,7 @@ export interface CardNote {
   readonly slug: string;
   readonly obligation: Obligation;
   readonly negativeControl: boolean;
-  readonly plannedBackingUsd?: number;
+  readonly fundedBackingUsd?: number;
   readonly recorded: CoverageState;
   readonly hederaId: string;
   readonly href: string;
@@ -24,7 +24,7 @@ export function NoteCard({ note }: { note: CardNote }) {
   const { demo } = useDemo();
   const state = stateForDemo(demo, note.recorded, obligationValue(note.obligation), {
     negativeControl: note.negativeControl,
-    plannedBackingUsd: note.plannedBackingUsd,
+    fundedBackingUsd: note.fundedBackingUsd,
   });
   const family = state.family === 'evidence' ? 'evidence' : state.family === 'covered' ? 'covered' : 'asset';
 

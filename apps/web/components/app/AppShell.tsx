@@ -64,7 +64,7 @@ function Band({ topic }: { topic: { id: string; href: string } }) {
           <a href={topic.href}>{topic.id}</a>
         </span>
         <span>
-          <small>Coverage feed</small>Not wired yet
+          <small>Coverage feed</small>Live, over MCP
         </span>
       </div>
       <fieldset className={styles.demo}>
@@ -84,7 +84,7 @@ function Band({ topic }: { topic: { id: string; href: string } }) {
         <p className={styles.demoNote}>
           {latched
             ? 'A refusal holds until a covering reading replaces it. Nothing here dismisses one.'
-            : 'No live reading exists yet. Walk the states to see what each one does.'}
+            : 'Each note shows a dated reading from chain. Walk the states to see what each one does.'}
         </p>
       </fieldset>
     </div>

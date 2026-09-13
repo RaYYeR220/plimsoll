@@ -11,7 +11,7 @@
  *                     state at all, and never rendered as one.
  *
  * Coverage is reported in basis points, so anything under 0.005% floors to zero: a note
- * holding $15 against $1,000,000 prints the same "0.00%" as a note holding nothing. The
+ * holding $1 against $1,000,000 prints the same "0.00%" as a note holding nothing. The
  * two are completely different findings, so `CoverageReadout` renders the amounts in full
  * and treats the percentage as the summary. Nothing in the app prints a ratio alone.
  */
@@ -57,11 +57,16 @@ export const parPerNote = (o: Obligation): number => o.nominalValue / 10 ** o.no
 /** What the note owes in full: supply × nominal. The denominator of every ratio. */
 export const obligationValue = (o: Obligation): number => notesOutstanding(o) * parPerNote(o);
 
-/** Basis points of coverage, floored the way the feed floors them. */
+/**
+ * Basis points of coverage, floored the way the feed floors them: $13.999999 against
+ * $10.00 is 139.99%, never a rounded 140.00% that would overstate it. The tolerance only
+ * absorbs binary-float noise — 8.7 / 10 × 10,000 is 8,699.999… in floating point — and is
+ * far below a USDC micro-unit on any obligation this app shows.
+ */
 export const coverageBps = (backingUsd: number, o: Obligation): number => {
   const owed = obligationValue(o);
   if (owed <= 0) return 0;
-  return Math.round((backingUsd / owed) * 10_000);
+  return Math.floor((backingUsd / owed) * 10_000 + 1e-6);
 };
 
 export const LINE_BPS = 10_000;

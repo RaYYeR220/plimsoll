@@ -1,6 +1,15 @@
 import { notFound } from 'next/navigation';
 import { NoteHero } from '@/components/app/NoteHero';
-import { formatAmount, formatUsd, notesOutstanding, obligationValue, parPerNote } from '@/lib/coverage-state';
+import {
+  coverageBps,
+  formatAmount,
+  formatBps,
+  formatUsd,
+  notesOutstanding,
+  obligationValue,
+  parPerNote,
+} from '@/lib/coverage-state';
+import type { VaultLeg } from '@/lib/notes';
 import { auditRecords, noteBySlug, notes, site } from '@/site.config';
 import styles from '@/components/app/app.module.css';
 import note from './note.module.css';
@@ -16,18 +25,29 @@ export default async function NotePage({ params }: { params: Promise<{ market: s
 
   const owed = obligationValue(record.obligation);
   const readOn = record.oracle.readOn;
-  const setWords = record.vaultSetSettled
-    ? `The vault set is registered, and when the oracle was read on ${readOn} the holder on Base was not funded yet.`
-    : 'The vault set is not final yet.';
+  const positions = record.positions;
+  const last = record.lastAttestation;
+  const utc = (iso: string) => `${iso.slice(11, 19)} UTC`;
+  const ownRecords = auditRecords.filter((r) => record.recordSeqs.includes(r.seq));
+  const liveRefusal = ownRecords.find((r) => r.live && r.decision === 'Refused');
   const recordedWords =
     record.oracle.reason === 'AttestationExpired'
-      ? `CoverageOracle reads ${record.market} as unproven: its last attestation has expired. ${setWords}`
-      : `CoverageOracle holds no attestation for ${record.market}. ${setWords}`;
-
-  const ownRecords = auditRecords.filter((r) => record.recordSeqs.includes(r.seq));
-  const plannedKnown = record.plan.filter((l) => typeof l.planned === 'number');
-  const plannedTotal = plannedKnown.reduce((sum, l) => sum + (l.planned as number), 0);
-  const widest = Math.max(...plannedKnown.map((l) => l.planned as number), 1);
+      ? last
+        ? `CoverageOracle reads ${record.market} as unproven: its last live attestation read ${formatBps(last.coverageBps)} at ${utc(last.acceptedAt)} and expired at ${utc(last.expiresAt)}. An expired attestation is not evidence, so the venue refuses until the next one.`
+        : `CoverageOracle reads ${record.market} as unproven: its last attestation has expired.`
+      : liveRefusal
+        ? `CoverageOracle holds no attestation for ${record.market}: the attestor read its position live and refused it as ${liveRefusal.reason}, so there was nothing to submit.`
+        : `CoverageOracle holds no attestation for ${record.market}.`;
+  /* A leg is drawn at what it held when read, or at its plan where there is no reading. */
+  const legValue = (l: VaultLeg): number =>
+    l.funded !== null ? Number(l.funded) : typeof l.planned === 'number' ? l.planned : 0;
+  const widest = Math.max(...record.plan.map(legValue), 1);
+  const planWords = (l: VaultLeg): string =>
+    typeof l.planned === 'number'
+      ? `planned ${formatUsd(l.planned)}`
+      : l.max !== undefined
+        ? `planned as the rest, up to ${formatUsd(l.max)}`
+        : 'planned as the rest';
 
   return (
     <>
@@ -61,7 +81,7 @@ export default async function NotePage({ params }: { params: Promise<{ market: s
         recorded={record.recorded}
         demonstrated={recordedWords}
         negativeControl={record.negativeControl}
-        plannedBackingUsd={record.plannedBackingUsd}
+        fundedBackingUsd={positions?.totalUsd}
       />
 
       <div className={note.grid}>
@@ -103,15 +123,19 @@ export default async function NotePage({ params }: { params: Promise<{ market: s
                 <span className={styles.legName}>
                   <a href={l.href}>{l.name}</a>
                   <small>
-                    {l.protocol} · {l.asset}
+                    {l.protocol} · {planWords(l)}
                   </small>
                 </span>
                 <span className={styles.legAmount}>
-                  {typeof l.planned === 'number' ? formatUsd(l.planned) : 'remainder'}
+                  {l.funded !== null
+                    ? `${l.funded} ${l.asset}`
+                    : typeof l.planned === 'number'
+                      ? formatUsd(l.planned)
+                      : 'remainder'}
                 </span>
                 <span className={styles.legBar}>
-                  {typeof l.planned === 'number' ? (
-                    <i style={{ width: `${Math.min(100, (l.planned / widest) * 100)}%` }} />
+                  {l.funded !== null || typeof l.planned === 'number' ? (
+                    <i style={{ width: `${Math.min(100, (legValue(l) / widest) * 100)}%` }} />
                   ) : (
                     <em className={note.rest} />
                   )}
@@ -120,13 +144,13 @@ export default async function NotePage({ params }: { params: Promise<{ market: s
             ))}
           </ul>
           <p className={styles.panelNote}>
-            On Base, held by <a href={site.holderHref}>the issuer's own address</a>.{' '}
+            Held on Base by <a href={site.holderHref}>the issuer's own address</a>.{' '}
             {record.vaultSetSettled
               ? 'The vault set is registered on CoverageOracle, and the two notes’ sets are disjoint: a position backs exactly one note.'
               : 'The two notes’ sets are disjoint: a position backs exactly one note.'}{' '}
-            The amounts are planned deposits, not a reading, so this note has no coverage figure until the holder is
-            funded and the first reading lands.{' '}
-            {plannedKnown.length > 0 && `Named legs come to ${formatUsd(plannedTotal)}.`}
+            {positions
+              ? `Read from each vault at ${positions.chain} block ${positions.block.toLocaleString('en-US')}, ${positions.readAt.replace('T', ' ').replace('Z', ' UTC')}: ${positions.totalUsdc} USDC, which is ${formatBps(coverageBps(positions.totalUsd, record.obligation))} of the ${formatUsd(owed)} the note owes. That is a reading of the positions, not an attestation: the oracle holds a figure only while a signed attestation is fresh, and without one the venue refuses.`
+              : 'No reading of these positions is recorded yet, so the amounts are the plan.'}
           </p>
         </section>
 
@@ -145,7 +169,7 @@ export default async function NotePage({ params }: { params: Promise<{ market: s
               ))}
             </ul>
             <p className={styles.panelNote}>
-              Measured on a fork of Base, not on funded positions. It is the case for a line drawn against value: the
+              Measured on a fork of Base before the deposits were made. It is the case for a line drawn against value: the
               market stops when what is behind the note is worth too little, whatever it is spread across.
             </p>
           </section>
@@ -188,6 +212,19 @@ export default async function NotePage({ params }: { params: Promise<{ market: s
               </span>
               <span className="sub">{recordedWords}</span>
             </li>
+            {last && (
+              <li>
+                <span className="k">
+                  <a href={last.href}>Last live attestation</a>
+                </span>
+                <span className="v">{formatBps(last.coverageBps)} · expired</span>
+                <span className="sub">
+                  Accepted at {utc(last.acceptedAt)}, read at Base block {last.asOfBlock.toLocaleString('en-US')}. While
+                  it was fresh LoadLine read {last.loadLine} against a {formatBps(last.thresholdBps)} line. It was valid
+                  until {utc(last.expiresAt)} and is no longer evidence.
+                </span>
+              </li>
+            )}
             {ownRecords.map((r) => (
               <li key={r.seq}>
                 <span className="k">
@@ -198,16 +235,16 @@ export default async function NotePage({ params }: { params: Promise<{ market: s
                   {r.bps !== null ? ` · ${(r.bps / 100).toFixed(2)}%` : ''}
                 </span>
                 <span className="sub">
-                  {r.backing} against {r.obligation}, computed from fixture backing ({r.source})
-                  {r.retiredVaultSet ? ' against the vault set that has since been replaced' : ''}. It proves the path on
-                  this note, not this note’s backing.
+                  {r.live
+                    ? `${r.backing} against ${r.obligation}, read live from this note’s registered vaults (${r.source}).`
+                    : `${r.backing} against ${r.obligation}, computed from fixture backing (${r.source})${r.retiredVaultSet ? ' against the vault set that has since been replaced' : ''}. It proves the path on this note, not this note’s backing.`}
                 </span>
               </li>
             ))}
           </ul>
           <p className={styles.panelNote}>
             A figure from fixture backing is never shown as this note’s coverage, and a lapsed attestation counts for
-            nothing. The first reading of the registered vaults will be a new record on the topic.
+            nothing: the venue trades on a fresh one or not at all.
           </p>
         </section>
 

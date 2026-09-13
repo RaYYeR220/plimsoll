@@ -50,14 +50,14 @@ export function Refusal() {
           <h3 id="uncharged-title">The refusal nobody paid for</h3>
           <p>
             The attestation service is paid per answer over x402, and it charges only for an answer it can stand behind.
-            Asked about a note covered at 87% against a floor of 100%, it refused, signed the refusal and wrote it to a
-            public Hedera topic as record {refusedShort}. The buyer’s payment was authorised and never submitted, so
-            there is no transfer to find.
+            Asked about PLIM-A, the negative control, it read the note’s position live — $1.00 against $1,000,000.00 —
+            refused, signed the refusal and wrote it to a public Hedera topic as record {refusedShort}. The buyer’s
+            payment was authorised and never submitted, so there is no transfer to find.
           </p>
           <p>
-            Record {attested} is the other outcome: a note that cleared, attested and paid for in one 0.001 HBAR
-            transaction. Record {refusedUnproven} is the third: the service could not prove coverage either way, so the
-            record carries no number at all.
+            Record {attested} is the other outcome: PLIM-B, read live at 140.00% of what it owes, attested and paid for in
+            one 0.001 HBAR transaction. Record {refusedUnproven} is the third, on one of the service’s own test notes: it
+            could not prove coverage either way, so the record carries no number at all.
           </p>
           <div className={`${styles.record} plate-outline`} data-lamp="arc">
             <p className={styles.status}>Record {refusedShort}, refused and not charged</p>
@@ -98,7 +98,7 @@ export function Register() {
     },
     {
       name: 'A paid attestation',
-      about: `Record ${site.records.attested}: 0.001 HBAR for a coverage reading that cleared, settled in one transaction.`,
+      about: `Record ${site.records.attested}: 0.001 HBAR for a live attestation of PLIM-B at 140.00%, settled in one transaction.`,
       id: site.attestedPayment.id,
       href: site.attestedPayment.href,
       where: 'HashScan',

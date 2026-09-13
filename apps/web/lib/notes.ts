@@ -7,8 +7,7 @@
  * Sources, in order of authority:
  *  - packages/substreams/notes.json          the note definitions (market, chain, vault set)
  *  - packages/contracts/deployments/*.json   what is deployed, issued and wired on Hedera
- *  - packages/backing/src/config.ts          the Base vault plan (TypeScript, mirrored in
- *                                            site.config.ts until it is emitted as JSON)
+ *  - packages/backing/backing-plan.json      the Base vaults each note is backed by, and the plan
  */
 
 import type { CoverageState, Obligation } from './coverage-state';
@@ -26,9 +25,24 @@ export interface VaultLeg {
   readonly protocol: string;
   readonly address: string;
   readonly asset: string;
-  /** Planned deposit in the vault's asset. The deposits are not recorded as made. */
+  /** The planned deposit in the vault's asset, or "rest" for what the funding left over. */
   readonly planned: number | 'rest';
+  /** Bounds on a "rest" leg, from the plan. */
+  readonly min?: number;
+  readonly max?: number;
+  /** What the position was worth when the vaults were read, in USDC to six places. */
+  readonly funded: string | null;
   readonly href: string;
+}
+
+/** A reading of the holder's positions on Base. A reading, not an attestation. */
+export interface PositionReading {
+  readonly chain: string;
+  readonly block: number;
+  /** ISO-8601 UTC timestamp of that block. */
+  readonly readAt: string;
+  readonly totalUsdc: string;
+  readonly totalUsd: number;
 }
 
 export interface NoteRecord {
@@ -57,13 +71,26 @@ export interface NoteRecord {
   readonly recorded: CoverageState;
   /** Records on the audit topic that name this note. */
   readonly recordSeqs: readonly number[];
-  /** The Base vaults the backing plan names for this note. */
+  /** The last attestation CoverageOracle accepted for this note, fresh or not. */
+  readonly lastAttestation?: {
+    readonly tx: string;
+    readonly href: string;
+    readonly acceptedAt: string;
+    readonly coverageBps: number;
+    readonly thresholdBps: number;
+    /** What LoadLine.status read while it was fresh. */
+    readonly loadLine: string;
+    readonly asOfBlock: number;
+    readonly expiresAt: string;
+    readonly record: number;
+  };
+  /** The Base vaults backing this note, with what each held when last read. */
   readonly plan: readonly VaultLeg[];
   /**
-   * What the plan puts behind this note, in dollars. Planned, not deposited, and used
-   * only so a negative control can show its real character instead of a derived figure.
+   * The holder's positions for this note, read from the vaults. Also what a negative
+   * control shows in a demonstration, so it never borrows a figure that would clear it.
    */
-  readonly plannedBackingUsd?: number;
+  readonly positions: PositionReading | null;
   /** What the plan does when tested on a fork: the case for the line, in measured steps. */
   readonly scenario?: ReadonlyArray<{
     readonly label: string;

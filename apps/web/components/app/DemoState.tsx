@@ -4,10 +4,10 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import type { CoverageState } from '@/lib/coverage-state';
 
 /**
- * Nothing here is a live reading. The feed that will produce one is not wired yet, so the
- * app shows each note's real recorded state and lets a visitor walk the others to see what
- * the screens do. Every figure that comes from this provider is labelled demonstration
- * wherever it is shown, and the live feed replaces exactly this one hook.
+ * Nothing this provider produces is a reading. Each note's recorded state is a dated read
+ * of the chain, and the visitor can walk the other states to see what the screens do.
+ * Every figure that comes from here is labelled demonstration wherever it is shown, and a
+ * live feed in the page would replace exactly this one hook.
  */
 
 export type DemoKey = 'recorded' | 'covered' | 'short' | 'no-positions' | 'evidence';
@@ -62,11 +62,11 @@ export function stateForDemo(
   demo: DemoKey,
   recorded: CoverageState,
   obligationUsd: number,
-  control?: { negativeControl: boolean; plannedBackingUsd?: number },
+  control?: { negativeControl: boolean; fundedBackingUsd?: number },
 ): CoverageState {
   if (demo === 'recorded') return recorded;
   if (control?.negativeControl) {
-    const backing = control.plannedBackingUsd ?? 0;
+    const backing = control.fundedBackingUsd ?? 0;
     return backing > 0 ? { family: 'short', backingUsd: backing } : { family: 'no-positions', backingUsd: 0 };
   }
   switch (demo) {

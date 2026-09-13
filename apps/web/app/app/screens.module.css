@@ -21,6 +21,14 @@
   grid-column: 1 / -1;
 }
 
+/* Two tracks where the grid has three, so a row never ends in a lone panel. Only at
+   widths that guarantee three tracks: on one track a span would invent a second. */
+@media (min-width: 1100px) {
+  .span2 {
+    grid-column: span 2;
+  }
+}
+
 /* two columns where one side is a transcript and the other a fixed artifact */
 .split {
   display: grid;

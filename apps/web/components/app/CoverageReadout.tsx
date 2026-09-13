@@ -19,7 +19,7 @@ import styles from './app.module.css';
 /**
  * The one place a coverage figure is allowed to be printed.
  *
- * A percentage never stands on its own: $15.02 against $1,000,000 and nothing at all both
+ * A percentage never stands on its own: $1.00 against $1,000,000 and nothing at all both
  * round to 0.00%, and they are different findings. So the amounts are always beside it, and
  * an evidence refusal shows no figure at all — only what the note owes, which is a fact
  * about the note rather than a reading of its backing.
@@ -45,7 +45,7 @@ export function CoverageReadout({
       <dl className={styles.readoutAmounts}>
         <div>
           <dt>Attributable backing</dt>
-          <dd>{figure ? formatUsd(state.backingUsd) : 'Not read'}</dd>
+          <dd>{figure ? formatUsd(state.backingUsd) : 'Not attested'}</dd>
         </div>
         <div>
           <dt>Outstanding</dt>
