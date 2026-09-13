@@ -185,7 +185,7 @@ All seven verified on Sourcify, `exact_match`. Full record with every transactio
 `PLIM-A` / ISIN `US0000PLIMA6`, `0xe2Bf359650fbacc7D4801336F8C1FE7061aD6387` (`0.0.10451856`).
 10,000.00 issued, 1,000.00 transferred to a second KYC'd holder.
 
-**A second note, sized to real backing** — `PLIM-B` / ISIN `US0000PLIMB4`, `0xCf759C717E805413aaa7D067dB7BD7A93969Def2` (`0.0.10482316`): 10.00 notes at par 1.00 USD, an on-chain obligation of **$10.00**, read back through `NominalValueFacet` (`getBondDetails()` does not exist on ATS v8). Its load line of 100.00% was set by a device-signed mandate, not an owner call. It is registered with the oracle under a placeholder vault set that spells `PLACEHOLDER-NOT-A-VAULT-SET`, so it reads *unproven* until the real Base vault list is registered. The market is authorised and approved to escrow an ask, and a quarterly coupon schedule is created but not armed; both wait on a clear line. PLIM-A, at $1,000,000 against the same backing, is the negative control and must always refuse.
+**A second note, sized to real backing** — `PLIM-B` / ISIN `US0000PLIMB4`, `0xCf759C717E805413aaa7D067dB7BD7A93969Def2` (`0.0.10482316`): 10.00 notes at par 1.00 USD, an on-chain obligation of **$10.00**, read back through `NominalValueFacet` (`getBondDetails()` does not exist on ATS v8). Its load line of 100.00% was set by a device-signed mandate, not an owner call. Its backing set - Morpho Gauntlet USDC Prime, Aave waBasUSDC and Spark sUSDC on Base - is registered with the oracle as the canonical vault-set hash `0xb1e9d3e6…f81e` ([`0x407cda62…`](https://hashscan.io/testnet/transaction/0x407cda62faf600ddb822cf83d31d32856e128a2def12d010273e29af9f48bc48)). The market is authorised and approved to escrow an ask, and a quarterly coupon schedule is created but not armed; both wait on a clear line. PLIM-A, at $1,000,000 against the same backing, is the negative control and must always refuse.
 
 **The cash leg** — HTS native token `PCASH`, `0.0.10474297`, 6 decimals, freeze key as above.
 
@@ -469,23 +469,27 @@ an emulator's seed exists as a string on the machine running it.
 **Testnet resets wipe both state and Sourcify verifications.** These addresses were deployed
 2026-09-10 and may need redeploying and re-verifying.
 
-**The attestor's signatures cannot yet be verified on-chain.** The attestor signs EIP-712 over domain
-`Plimsoll Attestor` with no `verifyingContract`, a `string noteId`, a `uint32` coverage and a random
-`bytes32` nonce. `CoverageOracle` verifies domain `Plimsoll CoverageOracle` with a `verifyingContract`,
-a `bytes32 noteId`, a `uint64` coverage and a strictly increasing `uint64` nonce. Nothing the attestor
-signs today will verify here. The note ids line up - EIP-712 hashes a string as `keccak256`, which is
-exactly how a market code becomes a note id. The decision is that the attestor adapts: this contract
-stays as deployed and is the single definition of the digest, which keeps `LoadLine`, the cash token
-and the verified record intact. Until the attestor's digests match it byte for byte, nothing can
-attest either note.
+**The attestor's payload verifies on-chain, but no attestation is live and none has measured anything.**
+The attestor adopted this contract's EIP-712 format - domain, `bytes32` note id, `uint64` coverage and a
+strictly increasing `uint64` nonce - so `CoverageOracle` stays the single definition of the digest. One
+PLIM-B attestation was accepted ([`0xc0370dfa…`](https://hashscan.io/testnet/transaction/0xc0370dfaea84d47ac6783df5d55f35f579af218951eeee2a0c470e542e422439)) and the same nonce resubmitted reverted
+`StaleAttestation` ([`0x4b414352…`](https://hashscan.io/testnet/transaction/0x4b414352cb6d0aa671a81966692877528d7d90db191133dc3899e7934ae36c04)). That proves signature compatibility and nothing
+else: `submitAttestation` recovered the registered attestor key over this contract's digest. **The 150.00%
+that record stores is not a coverage reading.** It was signed over non-live figures while the holder's real
+backing on Base was $0 - its source block, 51189399, is the one in the attestor's local PLIM-B test fixture,
+whose vault addresses are synthetic - it commits to the placeholder vault set retired since, and it expired
+after five minutes, so it can never count again. PLIM-B reads `Unproven`/`AttestationExpired` and PLIM-A
+`Unproven`/`NoAttestation`. The first coverage figure this project cites will be a live attestation over
+real Base positions, once the deposits land.
 
-**Both notes are registered with placeholder vault sets.** PLIM-A's `0x2627c1d5…9d57` is
-`sha256("plimsoll/vaults/v1")`, a string hashed by a one-off environment bootstrap, not a vault set;
-PLIM-B's is the readable placeholder above. `CoverageOracle` never computes this hash, so there is one
-definition, the attestor's `canonicalHash` over the lowercase sorted vault list, and
-`script/vault-set-hash.mjs` calls that code directly. Until `setVaultSet` is called with its output,
-each note refuses for an evidence reason (`VaultSetChanged`), not because it is short. The real sets
-will be disjoint - one position backs one note - and `setVaultSet` waits on the final Base vault lists.
+**Both placeholder vault sets are retired.** PLIM-A had been registered under `0x2627c1d5…9d57`, which
+is `sha256("plimsoll/vaults/v1")` - a string a one-off environment bootstrap hashed, not a vault set - and
+PLIM-B under the readable `PLACEHOLDER-NOT-A-VAULT-SET`. Both now carry their real Base sets: PLIM-B
+`0xb1e9d3e6…f81e` over three vaults ([`0x407cda62…`](https://hashscan.io/testnet/transaction/0x407cda62faf600ddb822cf83d31d32856e128a2def12d010273e29af9f48bc48)), and PLIM-A, the negative control,
+`0xbaf33c99…fa5c` over Fluid fUSDC alone ([`0xa85d21d5…`](https://hashscan.io/testnet/transaction/0xa85d21d57d864a55208a18774b30066fe412097aec6dd5130520bbebc21d0fa3)), disjoint because one position
+backs one note. `CoverageOracle` never computes this hash, so each value was recomputed with
+`script/vault-set-hash.mjs` - which calls the attestor's own `canonicalHash` - before either transaction
+was sent, and read back from `noteOf` afterwards. Both vault lists are in the deployment record.
 
 **`BerthMarket.placeAsk`'s own comment says operator rights suffice. They do not.** Real ATS requires an
 allowance, as above. The deployed bytecode is verified against the source as written, so the comment is

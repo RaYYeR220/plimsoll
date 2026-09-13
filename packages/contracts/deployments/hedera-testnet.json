@@ -117,7 +117,23 @@
       "mode": "single-partition, controllable, internal KYC on, control list in BLACKLIST mode",
       "hederaId": "0.0.10451856",
       "hashscan": "https://hashscan.io/testnet/contract/0xe2Bf359650fbacc7D4801336F8C1FE7061aD6387",
-      "vaultSetHashProvenance": "PLIM-A's registered vaultSetHash 0x2627c1d5...9d57 is sha256('plimsoll/vaults/v1') - a placeholder string hashed by a one-off .env bootstrap on 2026-09-10, never a vault set and never in the repository. It must be replaced via CoverageOracle.setVaultSet with the attestor's canonical hash."
+      "vaultSet": {
+        "vaultSetHash": "0xbaf33c99aa83d554b782e7dc98ad3e0f5e8838abfdd64c125f0a2e9627d8fa5c",
+        "vaults": [
+          "0xf42f5795d9ac7e9d757db633d693cd548cfd9169"
+        ],
+        "vaultsAre": "Fluid fUSDC on Base - deliberately disjoint from PLIM-B's set, one position backing one note",
+        "setVaultSetTx": "0xa85d21d57d864a55208a18774b30066fe412097aec6dd5130520bbebc21d0fa3",
+        "result": "SUCCESS",
+        "timestamp": "2026-09-12 00:19:01 UTC",
+        "hashscan": "https://hashscan.io/testnet/transaction/0xa85d21d57d864a55208a18774b30066fe412097aec6dd5130520bbebc21d0fa3",
+        "verification": "recomputed before sending with script/vault-set-hash.mjs, which calls the attestor's own canonicalHash over the lowercase sorted vault list - the single definition, since CoverageOracle never computes it - and read back from CoverageOracle.noteOf afterwards",
+        "retiredPlaceholder": {
+          "hash": "0x2627c1d5d160c60d5649c1c372cae5d054b6debfb30de1d00080af6073079d57",
+          "was": "sha256('plimsoll/vaults/v1'), a string hashed by a one-off .env bootstrap on 2026-09-10 - never a vault set. Retired."
+        },
+        "stateAfterSetVaultSet": "Unproven / NoAttestation: nothing has attested PLIM-A yet. As the negative control against a $1,000,000 obligation it must read Short once attested."
+      }
     },
     "lifecycle": [
       {
@@ -208,8 +224,25 @@
             "hashscan": "https://hashscan.io/testnet/transaction/0x1db522a5769aef1628e45b706f274e34faa3b012e7db97369ad93fe08d34455f",
             "attestor": "0x378F9395F8152669D4a24370341aA37b8d5Cb89D",
             "maxAgeSeconds": 900,
-            "vaultSetHash": "0x504c414345484f4c4445522d4e4f542d412d5641554c542d5345540000000000",
-            "vaultSetHashIs": "a deliberate placeholder: the bytes32 ASCII string PLACEHOLDER-NOT-A-VAULT-SET, which no canonical hash can produce. Replace with setVaultSet once the Base vault list is final, computed by script/vault-set-hash.mjs."
+            "vaultSetHash": "0xb1e9d3e61ec546b9efbea1d67b18058f2e9563e19c0a46491a86a05bc004f81e",
+            "vaultSet": {
+              "vaultSetHash": "0xb1e9d3e61ec546b9efbea1d67b18058f2e9563e19c0a46491a86a05bc004f81e",
+              "vaults": [
+                "0x3128a0f7f0ea68e7b7c9b00afa7e41045828e858",
+                "0xc768c589647798a6ee01a91fde98ef2ed046dbd6",
+                "0xee8f4ec5672f09119b96ab6fb59c27e1b7e44b61"
+              ],
+              "vaultsAre": "Morpho Gauntlet USDC Prime, Aave waBasUSDC and Spark sUSDC on Base (the set; addresses are sorted, not paired to names)",
+              "setVaultSetTx": "0x407cda62faf600ddb822cf83d31d32856e128a2def12d010273e29af9f48bc48",
+              "result": "SUCCESS",
+              "timestamp": "2026-09-12 00:18:54 UTC",
+              "hashscan": "https://hashscan.io/testnet/transaction/0x407cda62faf600ddb822cf83d31d32856e128a2def12d010273e29af9f48bc48",
+              "verification": "recomputed before sending with script/vault-set-hash.mjs, which calls the attestor's own canonicalHash over the lowercase sorted vault list - the single definition, since CoverageOracle never computes it - and read back from CoverageOracle.noteOf afterwards",
+              "retiredPlaceholder": {
+                "hash": "0x504c414345484f4c4445522d4e4f542d412d5641554c542d5345540000000000",
+                "was": "the bytes32 ASCII string PLACEHOLDER-NOT-A-VAULT-SET, registered at note creation. Retired."
+              }
+            }
           },
           "adapter": {
             "step": "MandateVerifierAdapter.registerMarket('PLIM-B')",
@@ -338,6 +371,36 @@
               "hashscan": "https://hashscan.io/testnet/transaction/0xea713eb20e94b89b2203a3d4a894c1a2c29d8f7e7de9a59b2d51fb18f7565717"
             }
           ]
+        },
+        "attestations": {
+          "summary": "Proves signature compatibility and nothing else: the attestor's EIP-712 payload recovers the registered attestor key in CoverageOracle.submitAttestation, and the same nonce resubmitted reverts StaleAttestation. Neither transaction is a coverage reading. Both predate setVaultSet and commit to the retired placeholder set.",
+          "accepted": {
+            "tx": "0xc0370dfaea84d47ac6783df5d55f35f579af218951eeee2a0c470e542e422439",
+            "result": "SUCCESS",
+            "timestamp": "2026-09-11 23:40:06 UTC",
+            "hashscan": "https://hashscan.io/testnet/transaction/0xc0370dfaea84d47ac6783df5d55f35f579af218951eeee2a0c470e542e422439",
+            "proves": "signature compatibility only - submitAttestation recovered the registered attestor key over this contract's digest",
+            "figures": "not live: signed over test figures while real backing was $0",
+            "notACoverageReading": "The stored coverageBps of 15000 (150.00%) measures nothing. The holder's real backing on Base was $0 when it was signed; its asOfBlock 51189399 is the asOfBlock in the attestor's local test fixture for PLIM-B (packages/attestor/src/coverage/fixtures/plim-b.json), whose vault addresses are synthetic; it commits to the retired placeholder vault set; and it expired five minutes after it was recorded, so it can never count again. The first coverage figure this project cites will be a live attestation over real Base positions.",
+            "storedRecord": {
+              "coverageBps": 15000,
+              "asOfBlock": 51189399,
+              "expiry": 1789170305,
+              "nonce": 1789170005,
+              "vaultSetHash": "0x504c414345484f4c4445522d4e4f542d412d5641554c542d5345540000000000",
+              "sourceHash": "0xfee755d9e9ea0389913eef2b777aa2a976526fe725fda9409a8e8bbe17992789",
+              "recordedAt": 1789170004
+            }
+          },
+          "replayRefused": {
+            "tx": "0x4b414352cb6d0aa671a81966692877528d7d90db191133dc3899e7934ae36c04",
+            "result": "CONTRACT_REVERT_EXECUTED",
+            "timestamp": "2026-09-11 23:40:07 UTC",
+            "hashscan": "https://hashscan.io/testnet/transaction/0x4b414352cb6d0aa671a81966692877528d7d90db191133dc3899e7934ae36c04",
+            "revertData": "0x348ad525000000000000000000000000000000000000000000000000000000006aa49155000000000000000000000000000000000000000000000000000000006aa49155",
+            "decoded": "StaleAttestation(provided 1789170005, floor 1789170005) - the same nonce submitted a second time"
+          },
+          "stateAfterSetVaultSet": "Unproven / AttestationExpired: the stored record lapsed at 1789170305 and commits to the retired placeholder, so it can never count again. The next PLIM-B attestation must carry the canonical hash, a nonce above 1789170005 and asOfBlock at or above 51189399."
         }
       }
     }
