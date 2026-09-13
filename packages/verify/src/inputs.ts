@@ -82,6 +82,12 @@ export interface ManifestRecord {
    * they were written in, so the expectation has to be per record.
    */
   format?: number;
+  /**
+   * A published evidence file, relative to this manifest, for a record whose
+   * readings did not fit inline. It is handed to verify-charge, which checks it
+   * hashes to the digest the record anchors before recomputing from it.
+   */
+  evidence?: string;
 }
 
 export interface Manifest {

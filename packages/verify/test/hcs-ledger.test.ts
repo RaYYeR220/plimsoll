@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { checkHcs, shapeProblems } from "../src/checks/hcs.js";
+import { loadInputs } from "../src/inputs.js";
 import { checkLedger } from "../src/checks/ledger.js";
 import type { CheckResult } from "../src/result.js";
 import {
@@ -83,6 +86,32 @@ describe("5 · x402 records on HCS", () => {
     const { asset } = sequences(inputs);
     const problems = shapeProblems({ p: "plimsoll/coverage", v: 1, d: "refused", fam: "asset", rsn: asset.reason, known: true, bps: 8700, chg: false }, asset);
     assert.ok(problems.some((p) => /declares v1/.test(p)));
+  });
+
+  it("hands verify-charge the published evidence a record names, resolved from the manifest", async () => {
+    const { inputs, world } = setup();
+    const { attested } = sequences(inputs);
+    attested.evidence = "../../../attestor/evidence/hcs-25.json";
+    const handed: Array<string | undefined> = [];
+    const stub = stubVerifyCharge(inputs);
+    const capturing: typeof stub = async (args) => {
+      handed.push(args.evidence);
+      return stub(args);
+    };
+    await checkHcs(makeContext(inputs, world, { verifyCharge: capturing }));
+    assert.ok(handed.includes(resolve(dirname(inputs.manifestPath), attested.evidence)));
+    assert.equal(handed.filter((path) => path !== undefined).length, 1, "only the record that names evidence is given any");
+  });
+
+  it("names only evidence files that exist in this checkout", () => {
+    // A manifest pointing at a file the repository does not carry would turn a
+    // verifiable record into an unverifiable one on a stranger's machine.
+    const live = loadInputs();
+    for (const record of live.manifest.hcs.records) {
+      if (!record.evidence) continue;
+      const path = resolve(dirname(live.manifestPath), record.evidence);
+      assert.ok(existsSync(path), `#${record.sequence} names ${record.evidence}, which is not at ${path}`);
+    }
   });
 
   it("fails when verify-charge finds a discrepancy, and when it cannot be loaded", async () => {

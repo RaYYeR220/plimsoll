@@ -9,22 +9,17 @@
     "refusalWindowSeconds": { "before": 120, "after": 300 },
     "records": [
       {
-        "sequence": 22,
+        "sequence": 25,
         "expect": "attested",
         "noteId": "PLIM-B",
-        "payment": "0.0.7162784@1789172046.246807405"
+        "payment": "0.0.7162784@1789277301.435133461",
+        "evidence": "../attestor/evidence/hcs-25.json"
       },
       {
-        "sequence": 23,
+        "sequence": 26,
         "expect": "asset-refusal",
         "noteId": "PLIM-A",
         "reason": "coverage_below_floor"
-      },
-      {
-        "sequence": 24,
-        "expect": "evidence-refusal",
-        "noteId": "NOTE-INDIA",
-        "reason": "source_unavailable"
       }
     ]
   },

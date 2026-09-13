@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { Context } from "../context.js";
 import { PACKAGE_ROOT, type ManifestRecord } from "../inputs.js";
 import { type Json, type TopicMessage, netFor, toMirrorTransactionId } from "../mirror.js";
@@ -168,18 +168,23 @@ export function shapeProblems(record: Json, expected: ManifestRecord, attestor?:
 async function verdictRow(ctx: Context, topicId: string, expected: ManifestRecord): Promise<CheckResult> {
   const title = `#${expected.sequence} verify-charge`;
   if (!ctx.verifyCharge) return fail(title, ctx.verifyChargeError ?? "the attestor's verify-charge is unavailable");
+  // Public data only: the topic, the mirror node, and for a digest-only record
+  // the evidence file published in this repository. Never our receipts.
+  const evidence = expected.evidence ? resolve(dirname(ctx.inputs.manifestPath), expected.evidence) : undefined;
   const result = await ctx.verifyCharge({
     hcs: { topicId, sequenceNumber: expected.sequence },
     dataDir: NO_RECEIPTS,
     json: true,
     explain: false,
     mirrorUrl: ctx.endpoints.mirror,
+    ...(evidence ? { evidence } : {}),
   });
   const want = expected.expect === "attested" ? "CHARGED AND WARRANTED" : "REFUSED AND NOT CHARGED";
   const failed = result.checks.filter((check) => !check.passed);
   if (result.verdict === want && failed.length === 0) {
     const ratio = result.recomputedBps === null ? "no ratio to recompute" : `recomputed ${result.recomputedBps} bps`;
-    return pass(title, `${result.verdict} · ${result.checks.length} checks · ${ratio}`);
+    const source = evidence ? " from the published evidence, which hashes to the anchored digest" : "";
+    return pass(title, `${result.verdict} · ${result.checks.length} checks · ${ratio}${source}`);
   }
   return fail(title, `${result.verdict}${failed.length ? `: ${failed.map((check) => check.label).join("; ")}` : ""}, expected ${want}`);
 }

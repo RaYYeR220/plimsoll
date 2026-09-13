@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
-import { rmSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { verifyCharge, type Args } from "../bin/verify-charge.js";
 import { buildAnchorRecord, type AnchorRecord } from "../src/anchor.js";
 import { attest } from "../src/attest.js";
-import { FixtureCoverageSource } from "../src/coverage/index.js";
+import { FixtureCoverageSource, type FixtureNote } from "../src/coverage/index.js";
 import { attestationToWire, createAttestorSigner, refusalToWire } from "../src/eip712.js";
 import { ReceiptStore, type StoredReceipt } from "../src/receipts.js";
 import {
@@ -351,6 +352,153 @@ describe("the verifier needs no credentials", () => {
     await assert.rejects(
       () => verifyCharge(args({ requestId: "ffffffffffffffff" })),
       /no anchored record and no receipt/,
+    );
+  });
+});
+
+describe("a digest-only record", () => {
+  /**
+   * Twelve legs: more than a record carries inline, so it anchors as a digest
+   * with `full: 0`. The live PLIM-B record did the same with three legs, because
+   * three positions and a block-hash source string exceed 1024 bytes.
+   */
+  function manyLegs(): FixtureNote {
+    const note: FixtureNote = {
+      noteId: "NOTE-MANY",
+      thresholdBps: 10000,
+      holder: "0x00000000000000000000000000000000006f1a55",
+      nominatedVaults: [],
+      notesOutstanding: "100000",
+      parPerNote: "1000000",
+      unitDecimals: 6,
+      asOfBlock: "42",
+      observedAt: -5,
+      sourceSet: { kind: "fixture", dataset: "many", endpoints: [] },
+      positions: [],
+    };
+    for (let i = 0; i < 12; i++) {
+      const vault = `0x4626${i.toString(16).padStart(2, "0")}${"cd".repeat(17)}`;
+      note.nominatedVaults.push(vault);
+      note.positions.push({ vault, shares: "10000000000", assets: "11000000000", assetDecimals: 6, blockNumber: "42" });
+    }
+    return note;
+  }
+
+  async function digestOnlyRecord(
+    requestId: string,
+    sequence: number,
+  ): Promise<{ anchor: AnchorRecord; receipt: StoredReceipt }> {
+    const verdict = await attest("NOTE-MANY", { source: new FixtureCoverageSource({}, [manyLegs()]), signer });
+    if (verdict.decision !== "attested") throw new Error(`expected an attestation, got ${verdict.reason}`);
+    const charge = { transactionId: SETTLEMENT_TX };
+    const anchor = buildAnchorRecord({
+      payTo: TEST_PAY_TO,
+      oracle: TEST_ANCHOR_ORACLE,
+      requestId,
+      verdict,
+      charge,
+      maxPositions: 6,
+    });
+    assert.equal(anchor.full, 0, "the record must declare itself digest-only");
+    assert.equal(anchor.pos, undefined);
+    publishToTopic(sequence, anchor);
+    mirror.transactions.set(
+      "0.0.7162784-1788800815-386309402",
+      stubMirrorTransaction({ transactionId: SETTLEMENT_TX, payer: PAYER, payTo: TEST_PAY_TO, amount: 100000 }),
+    );
+    const receipt: StoredReceipt = {
+      requestId,
+      noteId: verdict.noteId,
+      decision: "attested",
+      family: null,
+      reason: null,
+      coverageBps: verdict.coverageBps,
+      coverageKnown: true,
+      message: attestationToWire(verdict.message),
+      signature: verdict.signature,
+      attestor: verdict.attestor,
+      feed: verdict.feed,
+      sourceHash: verdict.sourceHash,
+      evidence: verdict.evidence,
+      chargeTransactionId: SETTLEMENT_TX,
+      payTo: TEST_PAY_TO,
+      amountTinybar: "100000",
+      payer: PAYER,
+      requestedAt: 1788800800,
+      respondedAt: 1788800801,
+      httpStatus: 200,
+      anchor: { topicId: "0.0.10451091", sequenceNumber: sequence, transactionId: SETTLEMENT_TX },
+      anchorRecord: anchor,
+    };
+    return { anchor, receipt };
+  }
+
+  function publish(receipt: StoredReceipt, name: string): string {
+    const dir = join(DATA_DIR, "evidence");
+    mkdirSync(dir, { recursive: true });
+    const path = join(dir, name);
+    writeFileSync(path, JSON.stringify(receipt, null, 2));
+    return path;
+  }
+
+  const hcs = (sequenceNumber: number) => ({ topicId: "0.0.10451091", sequenceNumber });
+
+  it("reports insufficient evidence, never a discrepancy, when its readings were not supplied", async () => {
+    // The regression: this once came back DISCREPANCY, "charged, but the
+    // evidence does not support an attestation" — a conviction on data nobody
+    // had looked at.
+    await digestOnlyRecord("dddd000000000001", 31);
+    const result = await verifyCharge(args({ hcs: hcs(31) }));
+    assert.notEqual(result.verdict, "DISCREPANCY", "a conviction on missing data is a false claim");
+    assert.equal(result.verdict, "INSUFFICIENT EVIDENCE TO RECOMPUTE");
+    assert.deepEqual(result.checks.filter((c) => !c.passed), []);
+    assert.equal(result.recomputedBps, null);
+    assert.match(result.checks.find((c) => c.id === "recompute")!.detail, /digest-only/);
+  });
+
+  it("recomputes and reaches a verdict from the published evidence", async () => {
+    const { receipt } = await digestOnlyRecord("dddd000000000002", 32);
+    const result = await verifyCharge(args({ hcs: hcs(32), evidence: publish(receipt, "hcs-32.json") }));
+    assert.equal(result.verdict, "CHARGED AND WARRANTED", JSON.stringify(result.checks.filter((c) => !c.passed)));
+    assert.equal(result.recomputedBps, 13200);
+    assert.equal(result.checks.find((c) => c.id === "evidence-file")!.passed, true);
+    assert.match(result.checks.find((c) => c.id === "recompute")!.detail, /hash-bound off-chain evidence/);
+  });
+
+  it("convicts evidence edited after it was anchored", async () => {
+    const { receipt } = await digestOnlyRecord("dddd000000000003", 33);
+    receipt.evidence!.positions[0]!.assets = "99000000000";
+    const result = await verifyCharge(args({ hcs: hcs(33), evidence: publish(receipt, "hcs-33.json") }));
+    assert.equal(result.verdict, "DISCREPANCY");
+    assert.equal(result.checks.find((c) => c.id === "evidence-file")!.passed, false);
+  });
+
+  it("convicts evidence published for a different request", async () => {
+    await digestOnlyRecord("dddd000000000004", 34);
+    const other = await digestOnlyRecord("dddd000000000005", 35);
+    const result = await verifyCharge(args({ hcs: hcs(34), evidence: publish(other.receipt, "hcs-34-wrong.json") }));
+    assert.equal(result.verdict, "DISCREPANCY");
+    assert.equal(result.checks.find((c) => c.id === "anchor-binding")!.passed, false);
+  });
+
+  it("still convicts a fault that needs no readings to see", async () => {
+    // An attestation anchored as uncharged is wrong whatever the ratio was. A
+    // digest excuses missing readings; it never excuses a missing payment.
+    const { anchor } = await digestOnlyRecord("dddd000000000006", 36);
+    anchor.chg = false;
+    delete anchor.tx;
+    publishToTopic(36, anchor);
+    mirror.accountTransfers.length = 0;
+    const result = await verifyCharge(args({ hcs: hcs(36) }));
+    assert.equal(result.verdict, "DISCREPANCY");
+    assert.equal(result.checks.find((c) => c.id === "biconditional")!.passed, false);
+  });
+
+  it("refuses to proceed when a named evidence file does not exist", async () => {
+    await digestOnlyRecord("dddd000000000007", 37);
+    await assert.rejects(
+      () => verifyCharge(args({ hcs: hcs(37), evidence: join(DATA_DIR, "evidence", "not-here.json") })),
+      /does not exist/,
     );
   });
 });

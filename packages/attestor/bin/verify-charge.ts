@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { AnchorRecord } from "../src/anchor.js";
+import { canonicalHash } from "../src/canonical.js";
 import { CURRENT_FORMAT, KNOWN_FORMATS, type FormatVersion } from "../src/format.js";
 import {
   MirrorClient,
@@ -41,6 +42,13 @@ const VERDICTS = {
   warranted: "CHARGED AND WARRANTED",
   refused: "REFUSED AND NOT CHARGED",
   discrepancy: "DISCREPANCY",
+  /**
+   * The record committed to readings it could not carry, and they were not
+   * supplied. That is an absence of evidence, not evidence of a fault: a
+   * conviction on missing data is the same false claim as a coverage figure
+   * invented where none was measured.
+   */
+  insufficient: "INSUFFICIENT EVIDENCE TO RECOMPUTE",
 } as const;
 
 type Verdict = (typeof VERDICTS)[keyof typeof VERDICTS];
@@ -49,6 +57,11 @@ export interface Args {
   requestId?: string;
   hcs?: { topicId: string; sequenceNumber: number };
   from?: string;
+  /**
+   * A published evidence file: the stored receipt of the request, whose
+   * evidence must hash to the digest the anchored record carries.
+   */
+  evidence?: string;
   dataDir: string;
   mirrorUrl?: string;
   json: boolean;
@@ -60,18 +73,24 @@ function usage(): string {
 
   Usage:
     verify-charge --request <requestId> [--from <attestorUrl>] [--data-dir <dir>]
-    verify-charge --hcs <topicId>:<sequenceNumber> [--from <attestorUrl>]
+    verify-charge --hcs <topicId>:<sequenceNumber> [--from <attestorUrl>] [--evidence <file>]
 
   Options:
     --request <id>     Request id printed by the attestor or the buyer.
     --hcs <t>:<n>      Topic id and sequence number of the anchored receipt.
     --from <url>       Fetch the receipt over HTTP instead of reading it locally.
+    --evidence <file>  A published evidence file for the request. Needed for a
+                       digest-only record (full: 0), whose readings did not fit
+                       in one 1024-byte consensus message. Its evidence must hash
+                       to the digest the record anchors.
     --data-dir <dir>   Local receipt directory (default: data).
     --mirror <url>     Mirror node base URL (default: public testnet).
     --json             Machine-readable output.
     --explain          Print the evidence the verdict was computed from.
 
-  Exit codes: 0 verdict reached, 2 DISCREPANCY, 3 not enough evidence to judge.
+  Exit codes: 0 verdict reached, 2 DISCREPANCY, 3 not enough evidence to judge,
+  including INSUFFICIENT EVIDENCE TO RECOMPUTE for a digest-only record without
+  its evidence.
 
   Needs no keys, no account and no access to the attestor's infrastructure.`;
 }
@@ -87,6 +106,7 @@ function parseArgs(argv: string[]): Args {
       if (!topicId || !sequence) throw new Error("--hcs expects <topicId>:<sequenceNumber>");
       args.hcs = { topicId, sequenceNumber: Number(sequence) };
     } else if (arg === "--from") args.from = next().replace(/\/$/, "");
+    else if (arg === "--evidence") args.evidence = next();
     else if (arg === "--data-dir") args.dataDir = next();
     else if (arg === "--mirror") args.mirrorUrl = next();
     else if (arg === "--json") args.json = true;
@@ -150,6 +170,12 @@ async function loadRecord(args: Args, mirror: MirrorClient): Promise<AnchoredMes
 }
 
 async function loadReceipt(args: Args, requestId: string): Promise<StoredReceipt | null> {
+  if (args.evidence) {
+    // Named explicitly, so a missing file is a missing input, not a quiet
+    // fallback to verifying less than was asked for.
+    if (!existsSync(args.evidence)) throw new NotEnoughEvidence(`the evidence file ${args.evidence} does not exist`);
+    return JSON.parse(readFileSync(args.evidence, "utf8")) as StoredReceipt;
+  }
   if (args.from) {
     const res = await fetch(`${args.from}/receipts/${requestId}`);
     if (res.status === 404) return null;
@@ -216,6 +242,22 @@ export async function verifyCharge(args: Args): Promise<VerificationResult> {
     checks.push(checkProvenance(encodingSubject));
   }
   if (record && receipt) checks.push(...checkAnchorBinding(record, receipt));
+  if (record && receipt && args.evidence) {
+    // Said directly rather than left implied by two other checks: a published
+    // file is only worth reading if what it contains is what was anchored.
+    const digest = receipt.evidence ? canonicalHash(receipt.evidence) : null;
+    const matches = digest !== null && digest === record.srch;
+    checks.push(
+      check(
+        "evidence-file",
+        "the published evidence hashes to the anchored digest",
+        matches,
+        matches
+          ? `${digest} is the srch record ${record.rid} anchors`
+          : `the file's evidence hashes to ${digest ?? "nothing"}, the record anchors ${record.srch ?? "no digest"}`,
+      ),
+    );
+  }
   if (record && !receipt) {
     checks.push(
       check(
@@ -240,6 +282,9 @@ export async function verifyCharge(args: Args): Promise<VerificationResult> {
   const unitDecimals = record?.ud ?? receipt?.evidence?.unitDecimals;
   const notesOutstanding = record?.out ?? receipt?.evidence?.notesOutstanding;
   const parPerNote = record?.par ?? receipt?.evidence?.parPerNote;
+
+  // The record says its positions are not inline and nothing supplied them.
+  const digestOnly = !positions && record?.full === 0;
 
   if (positions && unitDecimals !== undefined && notesOutstanding && parPerNote) {
     if (positions.length === 0) {
@@ -274,6 +319,16 @@ export async function verifyCharge(args: Args): Promise<VerificationResult> {
     checks.push(
       check("recompute", "coverage ratio recomputed from raw readings", true,
         "not applicable: this refusal states that no ratio was established"),
+    );
+  } else if (digestOnly) {
+    // Declared, not discovered: the record says it is a digest. Absence of the
+    // readings is reported as exactly that, and decides nothing either way.
+    checks.push(
+      check("recompute", "coverage ratio recomputed from raw readings", true,
+        "not possible from this record alone: it is digest-only (full: 0) because its readings did not fit " +
+          "in one 1024-byte consensus message. It commits to them by srch; pass --evidence <file> or --from " +
+          "<attestorUrl> to recompute",
+        true),
     );
   } else {
     checks.push(
@@ -400,19 +455,35 @@ export async function verifyCharge(args: Args): Promise<VerificationResult> {
   const warranted =
     decision === "attested" && recomputedBps !== null && floorBps !== null && recomputedBps >= floorBps;
   const chargeMatchesWarrant = claimedCharge === (decision === "attested");
-  checks.push(check("biconditional", "charge present if and only if an attestation was warranted",
-    chargeMatchesWarrant && (!claimedCharge || warranted),
-    claimedCharge
-      ? warranted
-        ? `charged, and ${recomputedBps} bps clears the ${floorBps} bps floor`
-        : `charged, but the evidence does not support an attestation`
-      : decision === "attested"
-        ? "an attestation was issued but no charge was recorded"
-        : "refused, and nothing was charged"));
+  if (digestOnly && chargeMatchesWarrant && claimedCharge) {
+    // Whether the charge was warranted turns on a ratio nobody could recompute
+    // here. A mismatch between charge and decision is still judged below: that
+    // needs no readings, and a digest never excuses it.
+    checks.push(check("biconditional", "charge present if and only if an attestation was warranted", true,
+      `charged for an attestation of ${anchoredBps} bps; whether that clears the ${floorBps} bps line cannot be ` +
+        "judged without the evidence the record commits to",
+      true));
+  } else {
+    checks.push(check("biconditional", "charge present if and only if an attestation was warranted",
+      chargeMatchesWarrant && (!claimedCharge || warranted),
+      claimedCharge
+        ? warranted
+          ? `charged, and ${recomputedBps} bps clears the ${floorBps} bps floor`
+          : `charged, but the evidence does not support an attestation`
+        : decision === "attested"
+          ? "an attestation was issued but no charge was recorded"
+          : "refused, and nothing was charged"));
+  }
 
   const failed = checks.filter((c) => !c.passed);
   const verdict: Verdict =
-    failed.length > 0 ? VERDICTS.discrepancy : claimedCharge ? VERDICTS.warranted : VERDICTS.refused;
+    failed.length > 0
+      ? VERDICTS.discrepancy
+      : digestOnly
+        ? VERDICTS.insufficient
+        : claimedCharge
+          ? VERDICTS.warranted
+          : VERDICTS.refused;
 
   const links: Record<string, string> = {};
   if (settlementTxId) links.settlement = hashscanTx(settlementTxId);
@@ -527,7 +598,9 @@ async function main(): Promise<void> {
   try {
     const result = await verifyCharge(args);
     console.log(args.json ? JSON.stringify(result, null, 2) : render(result, args.explain));
-    return finish(result.verdict === VERDICTS.discrepancy ? 2 : 0);
+    return finish(
+      result.verdict === VERDICTS.discrepancy ? 2 : result.verdict === VERDICTS.insufficient ? 3 : 0,
+    );
   } catch (error) {
     if (error instanceof NotEnoughEvidence) {
       console.error(`cannot evaluate: ${error.message}`);

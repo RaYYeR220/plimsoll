@@ -159,13 +159,15 @@ node, recomputes the coverage ratio with its own arithmetic, asks the ledger wha
 and prints a verdict.
 
 ```
-node dist/bin/verify-charge.js --hcs 0.0.10451091:17 --explain
+node dist/bin/verify-charge.js --hcs 0.0.10451091:26 --explain
+node dist/bin/verify-charge.js --hcs 0.0.10451091:25 --evidence evidence/hcs-25.json --explain
 node dist/bin/verify-charge.js --request <requestId> --from https://<host> --explain
 ```
 
 Three verdicts: `CHARGED AND WARRANTED` (exit 0), `REFUSED AND NOT CHARGED` (exit 0),
-`DISCREPANCY` (exit 2). Not being able to evaluate is exit 3 and is never reported as a
-verdict.
+`DISCREPANCY` (exit 2). A digest-only record checked without its evidence is
+`INSUFFICIENT EVIDENCE TO RECOMPUTE` (exit 3): an absence of readings is not a fault
+and is never reported as one. Not being able to evaluate at all is also exit 3.
 
 Proving the negative is the subtle part. A seller with real traffic will have other
 transfers in the same window, so "the buyer paid the seller around then" is not evidence
@@ -243,12 +245,38 @@ expose.
 
 ### Canonical records
 
-The records worth citing are live readings, anchored as format v3 with
-`"feed": "live"`: a paid attestation for PLIM-B, and a free refusal for PLIM-A,
-whose $1.00 of real backing against a $1,000,000.00 obligation floors to 0 bps
-against its own 9500 bps line. That zero is a finding about the asset, refused as
-`coverage_below_floor`; an unreachable source would have refused as an evidence
+Live readings of real positions on Base, anchored as format v3 with `"feed": "live"`
+on topic `0.0.10451091`. Primary endpoint Tenderly, witness Blast, both pinned to one
+block hash.
+
+| case | HCS seq | bytes | backing | settlement |
+| --- | --- | --- | --- | --- |
+| attested, PLIM-B, 14000 bps against its 10000 bps line | 25 | 863 | 14.000018 across Morpho, Aave and Spark, against 10.00, Base block 51,243,979 | `0.0.7162784@1789277301.435133461` |
+| asset refusal, PLIM-A, `coverage_below_floor`, 0 bps against its 9500 bps line | 26 | 957 | 1.000000 in Fluid against 1,000,000.00, Base block 51,244,012 | none |
+
+PLIM-A's zero is a finding about the asset: a real dollar, measured, against a
+million-dollar obligation. An unreachable source would have refused as an evidence
 failure with no figure at all. A real zero and an absence are different answers.
+
+```
+node dist/bin/verify-charge.js --hcs 0.0.10451091:26
+node dist/bin/verify-charge.js --hcs 0.0.10451091:25 --evidence evidence/hcs-25.json
+```
+
+#### Why seq 25 comes with an evidence file
+
+HCS carries at most 1024 bytes in one consensus message. Three positions plus a
+source string naming the full Base block hash come to 1096 bytes, so record 25
+anchors as a digest (`"full": 0`): it carries the ratio, the line, the obligation and
+`srch`, the hash of the complete evidence, but not the three readings themselves. The
+readings are published in [`evidence/hcs-25.json`](evidence/hcs-25.json), the
+request's stored receipt. `verify-charge --evidence` checks that the file's evidence
+hashes to the `srch` the record anchors, that its signature and every bound field
+agree with the record, and only then recomputes from it — 14000018 / 10000000 =
+14000 bps. An edited file fails the hash; a file from another request fails the
+binding. Given only the record, `verify-charge` reports
+`INSUFFICIENT EVIDENCE TO RECOMPUTE` and exits 3; it never convicts on readings it
+was not shown.
 
 Sequences 22–24 are v3 records produced from fixtures, and two of them carry real
 market codes with invented figures. They are not cited; MOCKS.md says why.
@@ -268,6 +296,24 @@ npm run submit-oracle -- --receipt data/receipts/<requestId>.json            # d
 npm run submit-oracle -- --receipt data/receipts/<requestId>.json --submit
 ```
 
+The paid PLIM-B attestation of seq 25, submitted about ten seconds after it was sold:
+
+| submission | Hedera transaction | EVM hash | outcome |
+| --- | --- | --- | --- |
+| the attestation | `0.0.10448897@1789277312.991739326` | `0x2fdaa9805fdf9a2447250dbab60f27c776d24858f7cbdec82de6a2203401d3aa` | `SUCCESS` |
+| the same bytes, replayed | `0.0.10448897@1789277314.412442067` | `0xa33b583902b90405112e74f0626063be3b6212be143d06cb847ff15ea68191c8` | `StaleAttestation(1789277310, 1789277310)` |
+
+`LoadLine.status(PLIM-B)` before and after, read keylessly through the JSON-RPC relay:
+
+```
+before  clear false · Unproven · AttestationExpired · 0 bps     · line 10000
+after   clear true  · Covered  · None               · 14000 bps · line 10000   (2026-09-13 05:28:46 UTC)
+```
+
+"Covered" lasts as long as the attestation: five minutes. After that the same call
+reads `AttestationExpired`, which is the oracle refusing to vouch for a reading it
+can no longer call fresh.
+
 ## Honest limits
 
 - **Two sources, and every record names which.** `LiveCoverageSource` reads real
@@ -283,6 +329,17 @@ npm run submit-oracle -- --receipt data/receipts/<requestId>.json --submit
 - **`verify-charge` does not re-read the vaults.** It recomputes the ratio from the
   anchored readings and checks the payment biconditional; re-reading Base at the
   anchored block is left to the reader.
+- **A live note with three positions does not fit in one consensus message.** The
+  source string names the full Base block hash, and with three positions the record
+  is 1096 bytes against HCS's 1024. It anchors as a digest and its readings are
+  published as an evidence file bound by hash. Future work, outside format v3: a
+  shorter source string (the block number and chain are already in the record, and
+  the hash is in the bound evidence), which would put three positions back inline.
+- **A short reading can go on chain, but this service never sends one yet.** `CoverageOracle.submitAttestation` has no threshold check, so a signed reading below the line is stored; `LoadLine.status` then reads `Short / BelowLoadLine` with the ratio, and `requireClear` reverts `BelowLoadLine(noteId, coverageBps, thresholdBps)`. The service signs a below-line result only as an `AssetRefusal`, which the oracle cannot accept. Future work: submit that refusal's own figures as the oracle's struct.
+- **An on-chain attestation is fresh for five minutes.** `LoadLine` reads Covered only
+  inside that window after each submission; outside it, it reads
+  `AttestationExpired`. Anything that has to show a clear line on chain has to be
+  timed to it.
 - **Single-writer nonce and receipt stores.** Files on disk, adequate for one process.
   Horizontal scaling needs shared storage.
 - **The HCS-14 UAID follows the reference implementation, not the spec prose.** The
@@ -319,5 +376,6 @@ bin/
   submit-oracle.ts   puts a live, paid-for attestation on CoverageOracle; refuses anything simulated
   register-agent.ts  one-time ERC-8004 registration
 demo/offline.ts      the whole product with no credentials
+evidence/            published evidence for digest-only canonical records, bound by srch
 test/                node:test
 ```

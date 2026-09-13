@@ -127,7 +127,7 @@ Everything below runs against live infrastructure and is exercised by the test s
 | HBAR movement | real. Buyer debited, seller credited, facilitator pays the network fee. |
 | EIP-712 signing | real, and now the contract's own format. Attestations are signed as the struct `CoverageOracle` recovers, under a domain bound to that oracle; `test/typed-data.test.ts` checks our digest against the deployed contract's `hashAttestation`. |
 | The load line | real. Read per note from `LoadLine.lineOf` alongside the note's other figures; a line that cannot be read is an evidence refusal, never a default. PLIM-A's is 9500 bps and PLIM-B's 10000. |
-| On-chain acceptance | a live attestation only. The earlier fixture-derived submission is disclosed above and is not cited. |
+| On-chain acceptance | real, live. The paid PLIM-B attestation of HCS seq 25 was accepted as `0.0.10448897@1789277312.991739326` and its replay refused `StaleAttestation` as `0.0.10448897@1789277314.412442067`; `LoadLine.status` then read Covered at 14000 bps. The earlier fixture-derived submission is disclosed above and is not cited. |
 | HCS anchoring | real. Consensus messages on a topic with a submit key and no admin key, each under 1024 bytes, single-chunk. |
 | Mirror node | real. Public REST API, no credentials. |
 | ERC-8004 identity | real. `register()` on the deployed registry at `0x8004A818…`, chain 296. |

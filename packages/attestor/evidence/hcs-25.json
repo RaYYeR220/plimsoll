@@ -1,0 +1,121 @@
+{
+  "requestId": "6b630ac408e15140",
+  "noteId": "PLIM-B",
+  "decision": "attested",
+  "family": null,
+  "reason": null,
+  "coverageBps": 14000,
+  "coverageKnown": true,
+  "message": {
+    "noteId": "0xb51023289ff2160bbde35658811ef0a869f6e250819060253e6135bc9aaa2f48",
+    "coverageBps": "14000",
+    "asOfBlock": "51243979",
+    "vaultSetHash": "0xb1e9d3e61ec546b9efbea1d67b18058f2e9563e19c0a46491a86a05bc004f81e",
+    "sourceHash": "0x7aa993fb566b77bc9785b31ca4f8a8c77fb8351bf81f81aee524f6f2e1585dcb",
+    "expiry": "1789277610",
+    "nonce": "1789277310"
+  },
+  "signature": "0x3bbc68ed33931c432106d5f9c65ba08e69a3793ee948b28f769ff976a24807743ab2dca7c025a43795f290b03ed90e3bde83576ec9efdec92c312abb10a822971c",
+  "attestor": "0x378F9395F8152669D4a24370341aA37b8d5Cb89D",
+  "feed": "live",
+  "sourceHash": "0x7aa993fb566b77bc9785b31ca4f8a8c77fb8351bf81f81aee524f6f2e1585dcb",
+  "evidence": {
+    "noteId": "PLIM-B",
+    "noteIdHash": "0xb51023289ff2160bbde35658811ef0a869f6e250819060253e6135bc9aaa2f48",
+    "holder": "0xa9f24d9633bf74d4893c6687cd2c9f4ecd6f413a",
+    "policyId": "plimsoll-coverage-1.1.0",
+    "policyHash": "0xdaba25651c8c6803fcc3bf9e2d1ba3183d83503a78e9a375679083864a3cfff0",
+    "floorBps": 10000,
+    "asOfBlock": "51243979",
+    "observedAt": 1789277305,
+    "unitDecimals": 6,
+    "notesOutstanding": "10",
+    "parPerNote": "1000000",
+    "obligation": "10000000",
+    "positions": [
+      {
+        "vault": "0x3128a0f7f0ea68e7b7c9b00afa7e41045828e858",
+        "shares": "2704236000000000000",
+        "declaredShares": "2704236000000000000",
+        "assets": "3000003",
+        "assetDecimals": 6,
+        "normalisedAssets": "3000003",
+        "blockNumber": "51243979"
+      },
+      {
+        "vault": "0xc768c589647798a6ee01a91fde98ef2ed046dbd6",
+        "shares": "2618853",
+        "declaredShares": "2618853",
+        "assets": "3000003",
+        "assetDecimals": 6,
+        "normalisedAssets": "3000003",
+        "blockNumber": "51243979"
+      },
+      {
+        "vault": "0xee8f4ec5672f09119b96ab6fb59c27e1b7e44b61",
+        "shares": "7200228173676370506",
+        "declaredShares": "7200228173676370506",
+        "assets": "8000012",
+        "assetDecimals": 6,
+        "normalisedAssets": "8000012",
+        "blockNumber": "51243979"
+      }
+    ],
+    "attributableValue": "14000018",
+    "sourceSet": {
+      "kind": "eth_call",
+      "dataset": "eip155:8453:0xdb9033cd774bb283c1f17b1d9bb0ab4dfd799a775c488e7d0bc9129498b1dcc0",
+      "endpoints": [
+        "base.gateway.tenderly.co",
+        "base-mainnet.public.blastapi.io",
+        "hedera-testnet:testnet.mirrornode.hedera.com@block 40451983",
+        "note 0xcf759c717e805413aaa7d067db7bd7a93969def2 totalSupply=1000/1e2 par=100/1e2 USD issuer=0xa9f24d9633bf74d4893c6687cd2c9f4ecd6f413a",
+        "loadLine 0xf867b6f41b21e9d72f327f867ae898620d022c80 threshold=10000bps"
+      ]
+    },
+    "vaultSetHash": "0xb1e9d3e61ec546b9efbea1d67b18058f2e9563e19c0a46491a86a05bc004f81e",
+    "observedVaultSetHash": "0xb1e9d3e61ec546b9efbea1d67b18058f2e9563e19c0a46491a86a05bc004f81e"
+  },
+  "chargeTransactionId": "0.0.7162784@1789277301.435133461",
+  "payTo": "0.0.10448897",
+  "amountTinybar": "100000",
+  "payer": "0.0.10451088",
+  "requestedAt": 1789277307,
+  "respondedAt": 1789277311,
+  "httpStatus": 200,
+  "anchor": {
+    "topicId": "0.0.10451091",
+    "sequenceNumber": 25,
+    "transactionId": "0.0.10448897@1789277306.364231684"
+  },
+  "anchorRecord": {
+    "p": "plimsoll/coverage",
+    "v": 3,
+    "rid": "6b630ac408e15140",
+    "n": "PLIM-B",
+    "d": "attested",
+    "pol": "plimsoll-coverage-1.1.0",
+    "att": "0x378F9395F8152669D4a24370341aA37b8d5Cb89D",
+    "sig": "0x3bbc68ed33931c432106d5f9c65ba08e69a3793ee948b28f769ff976a24807743ab2dca7c025a43795f290b03ed90e3bde83576ec9efdec92c312abb10a822971c",
+    "chg": true,
+    "tx": "0.0.7162784@1789277301.435133461",
+    "nid": "0xb51023289ff2160bbde35658811ef0a869f6e250819060253e6135bc9aaa2f48",
+    "feed": "live",
+    "pay": "0.0.10448897",
+    "orc": "0xCE13De224ed918D7b8B2717492849e0A82648ca3",
+    "cid": 296,
+    "bps": 14000,
+    "floor": 10000,
+    "blk": "51243979",
+    "obs": 1789277305,
+    "ud": 6,
+    "out": "10",
+    "par": "1000000",
+    "obl": "10000000",
+    "val": "14000018",
+    "ss": "eth_call:eip155:8453:0xdb9033cd774bb283c1f17b1d9bb0ab4dfd799a775c488e7d0bc9129498b1dcc0",
+    "vsh": "b1e9d3e61ec546b9",
+    "srch": "0x7aa993fb566b77bc9785b31ca4f8a8c77fb8351bf81f81aee524f6f2e1585dcb",
+    "full": 0
+  }
+}
