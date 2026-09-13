@@ -61,7 +61,7 @@ function bool(v: string | undefined, fallback: boolean): boolean {
  *   mainnet: head − finalBlockHeight ≈ 67 blocks ≈ 13.4 min
  *   base:    head − finalBlockHeight ≈ 168 blocks ≈ 5.6 min
  * Base carries the note backing, so it runs final-only: worst case a position
- * reading is 5.6 min of finality lag plus the 5 min map_positions cadence,
+ * reading is 5.6 min of finality lag plus the 100 s map_positions cadence,
  * which stays under the 15 min staleness policy. Mainnet final-only would sit
  * at 13 min of lag before any vault has even been touched, so mainnet serves
  * the head and every answer declares that it is not final.

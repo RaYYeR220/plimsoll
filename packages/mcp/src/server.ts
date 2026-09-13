@@ -12,7 +12,7 @@ import { loadConfig, readToken } from "./config.js";
 import { NetworkFeed, StreamSlots } from "./feed.js";
 import { buildMcpServer, SERVER_NAME, SERVER_VERSION } from "./mcp.js";
 import type { NotesFile } from "./notes.js";
-import { loadNotes, positionsParams } from "./notes.js";
+import { loadNotes, positionsParams, withEvery } from "./notes.js";
 import { LiveRangeRunner } from "./range.js";
 import { configure, loadPackage, networkParam } from "./spkg.js";
 import type { ToolDeps } from "./tools.js";
@@ -136,7 +136,7 @@ export async function main(): Promise<void> {
   for (const network of config.feedNetworks) {
     const extra: Record<string, string> =
       config.outputModule === "map_positions"
-        ? { map_positions: positionsParams(notes, network, holders, networkParam(loaded, network, "map_positions")) }
+        ? { map_positions: positionsParams(notes, network, holders, withEvery(networkParam(loaded, network, "map_positions"), process.env[`${network.toUpperCase()}_POSITIONS_EVERY`])) }
         : {};
     const configured = await configure(loaded, network, config.outputModule, extra);
     log(`feed ${network}: ${configured.outputModule}@${configured.moduleHash} final=${config.networks[network].finalBlocksOnly}`);

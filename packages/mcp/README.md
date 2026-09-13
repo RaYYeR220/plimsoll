@@ -184,12 +184,12 @@ Measured on 2026-09-11 against The Graph Market with `plimsoll_erc4626@v0.2.0`
 | head lag (stream head vs wall clock) at head | 4–18 s (12 samples, median ≈ 9 s) | not sampled at head |
 | head − `finalBlockHeight` | 64–95 blocks ≈ 13–19 min | ≈ 168 blocks ≈ 5.6 min |
 | warm-up from cold module hashes | 95–141 s | 95 s; 6 min 40 s after a WASM change |
-| `map_positions` read cadence | 50 blocks ≈ 10 min | 150 blocks ≈ 5 min |
+| `map_positions` read cadence | 50 blocks ≈ 10 min | every executed block (at most 56 s apart, measured) |
 
 Choices that follow from these numbers:
 
 - **Base runs final-only.** It carries the note backing. Worst-case position age
-  is about 5.6 min of finality lag plus 5 min of cadence, which stays under the
+  is about 5.6 min of finality lag plus the gap between executed blocks (at most 56 s in a 120-block test), which stays under the
   attestor's 15 min `maxStalenessSeconds`. So an attestation-grade answer never
   rests on a block that can reorg away. The head-lag threshold is 600 s.
 - **Mainnet serves the head, and says so.** Final-only would put 13–19 min of
@@ -258,6 +258,177 @@ whose vault list is not final use placeholder notes, **synthetic** position
 readings and a stand-in registry. Those tests say so in their headers. The live
 test is skipped unless a token is present.
 
+## Live numbers
+
+Captured from the running server at 10:14 UTC on 13 September 2026, streaming the
+registry-published package over The Graph Market, with `BASE_POSITIONS_EVERY=1`.
+Over the nine minutes before this capture (24 polls, 10:05 to 10:14 UTC), both
+notes answered from a fresh reading on every poll: position age 401 to 421 s,
+mean 406 s, head lag 400 to 402 s, and no `data_stale`.
+
+`feed_status`, Base:
+
+```json
+{
+  "status": "live",
+  "finalBlocksOnly": true,
+  "headMaxLagSeconds": 600,
+  "vaultsTracked": 32,
+  "lastError": null,
+  "endpoint": "https://base-mainnet.streamingfast.io",
+  "package": {
+    "name": "plimsoll_erc4626",
+    "version": "v0.2.0",
+    "sha256": "3be7c4634e741f3bc720791594f92c743c7848d55bcdf63acc740befcaef52a7"
+  },
+  "module": {
+    "name": "map_positions",
+    "hash": "fb21ef83f438cac1538aad272f9aa82c2f7ae1b0"
+  },
+  "head": {
+    "number": "51252365",
+    "timestamp": "2026-09-13T10:07:57.000Z",
+    "lagSeconds": 401
+  }
+}
+```
+
+`note_coverage` for PLIM-B: `covered`, $14.0001 attributable against an obligation of $10.0000:
+
+```json
+{
+  "result": "covered",
+  "coverageBps": 14000,
+  "thresholdBps": 10000,
+  "market": "PLIM-B",
+  "unitDecimals": 4,
+  "obligation": "100000",
+  "attributable": "140001",
+  "positions": [
+    {
+      "vault": "0x3128a0f7f0ea68e7b7c9b00afa7e41045828e858",
+      "shares": "2704236000000000000",
+      "assets": "3000060"
+    },
+    {
+      "vault": "0xc768c589647798a6ee01a91fde98ef2ed046dbd6",
+      "shares": "2618853",
+      "assets": "3000059"
+    },
+    {
+      "vault": "0xee8f4ec5672f09119b96ab6fb59c27e1b7e44b61",
+      "shares": "7200228173676370506",
+      "assets": "8000191"
+    }
+  ],
+  "provenance": {
+    "package": {
+      "name": "plimsoll_erc4626",
+      "version": "v0.2.0",
+      "sha256": "3be7c4634e741f3bc720791594f92c743c7848d55bcdf63acc740befcaef52a7"
+    },
+    "module": {
+      "name": "map_positions",
+      "hash": "fb21ef83f438cac1538aad272f9aa82c2f7ae1b0"
+    },
+    "block": {
+      "number": "51252361",
+      "hash": "0x94e5f32c899e8fca99817178558ea36740b7357c8d4459f0a251a4cf30824a24",
+      "timestamp": "2026-09-13T10:07:49.000Z",
+      "final": true
+    },
+    "headLagSeconds": 401,
+    "registryReads": 10
+  }
+}
+```
+
+`note_coverage` for PLIM-A, the negative control: refused, $1.0000 attributable against $1,000,000.0000.
+Coverage reads 0 bps, which is exactly why `obligation` and `attributable` are
+quoted in full: at basis-point resolution this note and an empty wallet look the same.
+
+```json
+{
+  "result": "refused",
+  "family": "asset",
+  "reason": "coverage_below_floor",
+  "coverageKnown": true,
+  "coverageBps": 0,
+  "floorBps": 9500,
+  "detail": {
+    "market": "PLIM-A",
+    "negativeControl": true,
+    "unitDecimals": 4,
+    "obligation": "10000000000",
+    "attributable": "10000",
+    "positions": [
+      {
+        "vault": "0xf42f5795d9ac7e9d757db633d693cd548cfd9169",
+        "shares": "882636",
+        "assets": "1000025"
+      }
+    ]
+  },
+  "provenance": {
+    "package": {
+      "name": "plimsoll_erc4626",
+      "version": "v0.2.0",
+      "sha256": "3be7c4634e741f3bc720791594f92c743c7848d55bcdf63acc740befcaef52a7"
+    },
+    "module": {
+      "name": "map_positions",
+      "hash": "fb21ef83f438cac1538aad272f9aa82c2f7ae1b0"
+    },
+    "block": {
+      "number": "51252361",
+      "hash": "0x94e5f32c899e8fca99817178558ea36740b7357c8d4459f0a251a4cf30824a24",
+      "timestamp": "2026-09-13T10:07:49.000Z",
+      "final": true
+    },
+    "headLagSeconds": 401,
+    "registryReads": 10
+  }
+}
+```
+
+## Measured live: deposit to coverage
+
+The issuer deposited real USDC into the nominated Base vaults on 13 September.
+This is the delay from each deposit transaction to the first `note_coverage`
+answer that reflected it, split into Base finality (the stream's measured head
+lag at that moment) and everything else (the pipeline plus this observer's
+20 s polling interval):
+
+| Note | Deposit | Tx block (UTC) | First funded answer | Total | Base finality | Pipeline and polling |
+|---|---|---|---|---|---|---|
+| PLIM-A | Fluid fUSDC, 1 USDC | 51,243,387 (05:08:41) | 05:15:32, `coverage_below_floor` | 411 s | ~401 s | at most 10 s |
+| PLIM-B | Gauntlet USDC Prime, 8 USDC, first leg | 51,243,390 (05:08:47) | 05:15:55, `covered` | 428 s | ~401 s | at most 27 s |
+| PLIM-B | Spark sUSDC, 3 USDC, last leg | 51,243,394 (05:08:55) | 05:15:55, `covered` | 420 s | ~401 s | at most 19 s |
+
+The third PLIM-B leg, Aave waBasUSDC with 3 USDC, landed at 51,243,391 (05:08:49).
+
+- **About 95 % of the delay is Base finality, by design.** The Base feed serves
+  final blocks only, because a coverage answer must not rest on a block that can
+  be reorganised away.
+- **Settled answers.** PLIM-B is `covered` at 13,999 bps against a 10,000 bps
+  threshold: attributable `139999` against obligation `100000` at 4 unit
+  decimals, i.e. $13.9999 against $10.0000. PLIM-A is `coverage_below_floor` at
+  0 bps against 9,500: attributable `9999` against `10000000000`, i.e. $0.9999
+  against $1,000,000.0000. Four unit decimals truncate, so the waBasUSDC leg,
+  which converts 3 USDC to 2.999999, makes $13.999999 read as $13.9999. Both
+  figures have since risen by one unit as vault yield accrues.
+- **The partially funded refusal was not caught.** PLIM-B's three deposits landed
+  in blocks 51,243,390, 391 and 394, eight seconds apart, and all three became
+  final in the same Base finality burst. The server answered $0 at block
+  51,243,374 on one poll and `covered` at block 51,243,394 on the next, 23 s
+  later. The intermediate readings existed in the stream but were superseded
+  before any poll saw them. A partially funded state is only observable when
+  the legs land further apart than one finality burst.
+- **The cadence bug did not affect these numbers.** A deposit is a vault
+  movement, and a vault movement forces a reading in its own block.
+- Every funded answer cites the package as served by the registry: sha256
+  `3be7c463…52a7`.
+
 ## Honest limits
 
 - **The token allows 2 concurrent streams.** One long-lived feed takes one, and
@@ -286,9 +457,14 @@ test is skipped unless a token is present.
 - **A vault is known only once it has had a flow** since the stream (or
   package) start. A quiet vault refuses `vault_unresolved` or `data_stale`
   rather than report a state nobody has looked at recently.
-- **Positions are read on a cadence:** every 150 blocks on Base and every 50 on
-  mainnet, plus any block where a nominated vault moves. Their age is bounded
-  by that cadence plus finality lag, which is why Base runs final-only.
+- **Positions are read when the module executes, not on a clock.** This bullet
+  used to say "every 150 blocks on Base and every 50 on mainnet, plus any block
+  where a nominated vault moves". That was wrong. A cadence tick only fires in a
+  block that carries an ERC-4626 event, because Substreams skips a module whose
+  map input is empty (measured below). The server therefore runs
+  `BASE_POSITIONS_EVERY=1`, which reads positions on every block that executes.
+  Position age is then finality lag plus the gap between executed blocks, which
+  is why Base runs final-only.
 - **Coverage assumes USD par and USD-pegged underlyings.** A non-USD note
   currency, or an underlying not priced at peg, refuses `vault_unresolved`.
 - **Basis points cannot tell a tiny position from none.** Coverage is carried
@@ -309,6 +485,29 @@ test is skipped unless a token is present.
   `PLACEHOLDER-NOT-A-VAULT-SET`. Neither is the hash of a vault list, so both
   notes refuse `vault_set_drift` until `setVaultSet` commits the real lists. That is the intended behaviour, and it
   is what the live transcript below shows.
+- **Measured in the first live hour on Base (00:26 to 01:25 UTC, 13 September),
+  at a positions cadence of 150 blocks.**
+  - One `data_stale` refusal, first attributed here to a finality gap; the
+    corrected cause is two items down. No new final block carried
+    a position reading after block 51,236,068 (01:04:43Z), and at 01:19:52Z the
+    note answer was refused `data_stale`: the reading was about 909 s old
+    against the 900 s policy. It recovered at 01:22:02Z on block 51,236,378.
+    The server refused rather than serve an old figure, which is the intended
+    behaviour, but it shows the margin: position age is the cadence plus the
+    final-only lag (about 400 s) plus the gap between finality bursts.
+  - Four transient `source_unavailable` answers (00:51, 01:12, 01:14 and
+    01:25Z), each followed by a normal answer on the next poll 30 s later.
+    **Cause unconfirmed:** the server does not log per-request refusals, and
+    the poller that saw them kept only the reason, not `detail.cause`.
+  - Lowering the cadence from 150 to 50 blocks did not help, and the real cause
+    is in the package, not finality. Substreams skips a module whose map input
+    is empty, and the upstream ERC-4626 extractor is empty on any block without
+    a 4626 event on the chain, so a cadence tick only fires if its block also has
+    vault activity. Base tick blocks 51,243,600, 650 and 700 had no such logs and
+    produced no reading, and both notes refused `data_stale` at 949 s while the
+    feed was live. The server now runs `BASE_POSITIONS_EVERY=1`: in a 120-block
+    test that read on all 26 executed blocks, at most 28 blocks (56 s) apart,
+    with 104 of 104 position rows ok. The 900 s policy was not relaxed.
 - **Defence in depth against the package.** The package's `rates_consistent`
   flag had a division-by-zero hole: a vault reporting `totalAssets = 0` against
   outstanding shares passed as consistent. Replaying recorded live data caught

@@ -69,7 +69,7 @@ graph TD
 | `store_totals` | store, `add` | bigint | Cumulative flows, revenue (asset wei and USD×1e18), protocol TVL, pool and user counts. |
 | `map_messari` | map | `messari.yield_aggregator.v1.Entities` | Messari Yield Aggregator v1.3.1: `YieldAggregator` (with `schemaVersion` / `subgraphVersion` / `methodologyVersion`), `Vault`, `VaultFee`, `Token`, `Deposit`, `Withdraw`. |
 | `store_asset_prices` | store, `set` | string | Last USD price per underlying, as `price@block`, so a position can say how old its price is. |
-| `map_positions` | map | `Positions` | Nominated `(note, holder, vault)` positions. It reads `balanceOf(holder)` and then `convertToAssets(shares)` by `eth_call` on a cadence, and also in any block where a nominated vault moved. The block's `VaultBlocks` ride along, so one stream serves both vault and note queries. Params: `every=<blocks>;<noteId>=<holder>:<vault>,<vault>;…` |
+| `map_positions` | map | `Positions` | Nominated `(note, holder, vault)` positions. It reads `balanceOf(holder)` and then `convertToAssets(shares)` by `eth_call` on a cadence, and also in any block where a nominated vault moved. The cadence only counts blocks that execute; see Honest limits, and use `every=1`. The block's `VaultBlocks` ride along, so one stream serves both vault and note queries. Params: `every=<blocks>;<noteId>=<holder>:<vault>,<vault>;…` |
 
 ## The three holes Pinax documents, and what this package does about them
 
@@ -194,7 +194,10 @@ absent from Base's peg list, because it is not a dollar.
     returned zero, which is not the same as `ok = false`.
 
   Positions were read in 45 of the 300 blocks: every block in which the vault
-  moved, plus the cadence ticks.
+  moved, plus the cadence ticks. *Correction:* that last part was never verified and
+  is withdrawn. The vault moved in most blocks of this run, so vault reads and
+  cadence reads could not be told apart, and cadence ticks only fire on blocks
+  that carry an ERC-4626 event (see Honest limits).
 - **Every Base position reading is wei-exact against an independent archive
   node: 90/90.** `scripts/crosscheck_positions.py` re-asks drpc, Tenderly and
   Blast for the same `balanceOf(holder)` and `convertToAssets(shares)` at the
@@ -549,10 +552,20 @@ v0.1.2. Run it before every publish.
   without warning.
 - Needs a provider that serves `eth_call` inside Substreams. The Graph Market's
   StreamingFast endpoint does.
-- **Positions are read on a cadence.** A position can be up to `every` blocks
-  old, unless its vault moved in between, which forces a read. A consumer must
-  enforce its own staleness bound on `block_number` / `timestamp`, as
-  `packages/mcp` does.
+- **A cadence tick only fires in a block where the module executes.** Substreams
+  skips a module whose map input produced no output, and Pinax's `map_events`
+  is empty on any block with no ERC-4626 event anywhere on the chain. So
+  `map_flows`, `map_vault_blocks` and `map_positions` do not run on those
+  blocks, and `every=N` only yields a reading if a multiple of N also has 4626
+  activity, roughly a quarter to a third of Base blocks. We found this in live
+  data: Base tick blocks 51,243,600, 650 and 700 had no ERC-4626 logs on the
+  chain and produced no output, and a note refused `data_stale` at 949 s while
+  the feed was healthy. **Use `every=1`**, which reads positions on every block
+  that executes. Over the same 120 blocks that gave readings on all 26 executed
+  blocks, at most 28 blocks (56 s) apart, with 104 of 104 position rows `ok`.
+  The cost is about 20 batched `eth_call`s per active block, which adds latency
+  and is not billed. A consumer must still enforce its own staleness bound on
+  `block_number` / `timestamp`, as `packages/mcp` does.
 - **A position's USD value uses the last price observed** for that asset
   (`price_block`). That is exact for peg stablecoins. For WETH it is the
   Chainlink price at the last block in which any WETH vault moved.

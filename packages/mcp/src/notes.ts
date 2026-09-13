@@ -111,6 +111,27 @@ export function overlappingVaults(
  * cadence) followed by one `<noteId>=<holder>:<vault>,...` entry per note
  * whose holder has been read from chain and whose vault list is non-empty.
  */
+/**
+ * The manifest's map_positions settings with the cadence replaced by a runtime
+ * value. The cadence is an ordinary module param, so a consumer can read more
+ * often than the published package's default without a new package version;
+ * only the map_positions module hash changes, as it already does for the
+ * holder and vault list. A malformed value throws rather than falling back to
+ * the default, because a silently wrong cadence is a silently wrong freshness.
+ */
+export function withEvery(manifestDefault: string, override: string | undefined): string {
+  if (override === undefined || override.trim() === "") return manifestDefault;
+  const every = Number(override.trim());
+  if (!Number.isInteger(every) || every <= 0) {
+    throw new Error(`positions cadence must be a positive integer, got ${JSON.stringify(override)}`);
+  }
+  const kept = manifestDefault
+    .split(";")
+    .map((part) => part.trim())
+    .filter((part) => part !== "" && !part.startsWith("every="));
+  return [`every=${every}`, ...kept].join(";");
+}
+
 export function positionsParams(
   file: NotesFile,
   network: NetworkName,
