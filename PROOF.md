@@ -3,14 +3,15 @@
 Every claim below is a link you can open. Grouped by claim, not by package.
 
 > **Hedera testnet resets wipe both state and Sourcify verifications.** If a link stops resolving,
-> that is what happened, and the deployment has to be re-run and re-verified. Nothing here is on
-> mainnet.
+> that is what happened, and the deployment has to be re-run and re-verified. Nothing on Hedera
+> here is on mainnet.
 >
-> **Everything on this page was last checked on 2026-09-12.** Each transaction was fetched from
-> the public mirror node at `testnet.mirrornode.hedera.com/api/v1/contracts/results/<hash>` and
-> each contract from `sourcify.dev/server/v2/contract/296/<address>`. HashScan is the same records
-> rendered for a human; it is a browser application, so the mirror node link beside each one is
-> the machine-checkable form. Anything that did not resolve is said so, at the bottom.
+> **Everything on this page was last checked on 2026-09-13.** Each transaction was fetched from
+> the public mirror node at `testnet.mirrornode.hedera.com/api/v1/contracts/results/<hash>`, each
+> contract from `sourcify.dev/server/v2/contract/296/<address>`, and contract state by keyless
+> `eth_call`. HashScan is the same records rendered for a human; it is a browser application, so
+> the mirror node link beside each one is the machine-checkable form. Anything that did not resolve
+> is said so, at the bottom.
 
 To check the whole page at once instead of link by link:
 
@@ -76,13 +77,13 @@ units at 2 decimals is 10.00 notes, and `getNominalValue` 100 at 2 decimals is $
 has no `getBondDetails`, so par comes from `NominalValueFacet`.
 
 The obligations are the whole point of the pair. **PLIM-A is the negative control**: 10,000.00
-notes at a par of 100.00 is a $1,000,000 obligation against roughly $15 of backing, so it must
-refuse forever. PLIM-B is the one that should clear.
+notes at a par of 100.00 is a $1,000,000 obligation against a planned backing of roughly $15, so it
+must refuse forever. PLIM-B is the one that should clear.
 
 ## 3. Only a human with a device can move the load line
 
 The verifier trusts exactly one key, `0x69fC09FA24102a5C02B227072Bee5b71d7AeF3e2`, a Ledger Nano S
-Plus emulated by Speculos on a freshly generated private seed that is not in this repository and
+Plus emulated by Speculos on a freshly created private seed that is not in this repository and
 is not the public test seed. Every mandate below was rendered on the device screen, decided there,
 and then submitted. The full transcript, including the text the device actually displayed page by
 page, is [`deployments/device-proof.json`](packages/contracts/deployments/device-proof.json).
@@ -163,55 +164,129 @@ non-reverting check, and books nothing if either leg would fail:
 ## 6. A refusal is signed, and not charged
 
 Topic [`0.0.10451091`](https://hashscan.io/testnet/topic/0.0.10451091) has no admin key, so
-nothing written to it can be withdrawn, including our mistakes. Three canonical records, encoding
-`v: 2`, all single-chunk under the 1024-byte limit:
+nothing written to it can be withdrawn, including our mistakes. Three canonical records in the
+current encoding, `v: 3`, all single-chunk under the 1024-byte limit:
 
 | Case | Record | Bytes | Settlement |
 |---|---|---|---|
-| attested, 13000 bps against a 10000 floor | [seq 17](https://testnet.mirrornode.hedera.com/api/v1/topics/0.0.10451091/messages/17) | 843 | [`0.0.7162784@1789121899.540907773`](https://testnet.mirrornode.hedera.com/api/v1/transactions/0.0.7162784-1789121899-540907773) |
-| asset refusal, `coverage_below_floor`, 8700 bps | [seq 18](https://testnet.mirrornode.hedera.com/api/v1/topics/0.0.10451091/messages/18) | 832 | none exists |
-| evidence refusal, `source_unavailable` | [seq 19](https://testnet.mirrornode.hedera.com/api/v1/topics/0.0.10451091/messages/19) | 365 | none exists |
+| attested, PLIM-B, 15000 bps against a 10000 floor | [seq 22](https://testnet.mirrornode.hedera.com/api/v1/topics/0.0.10451091/messages/22) | 963 | [`0.0.7162784@1789172046.246807405`](https://testnet.mirrornode.hedera.com/api/v1/transactions/0.0.7162784-1789172046-246807405) |
+| asset refusal, PLIM-A, `coverage_below_floor`, 0 bps | [seq 23](https://testnet.mirrornode.hedera.com/api/v1/topics/0.0.10451091/messages/23) | 985 | none exists |
+| evidence refusal, `source_unavailable` | [seq 24](https://testnet.mirrornode.hedera.com/api/v1/topics/0.0.10451091/messages/24) | 539 | none exists |
 
-Open seq 19. It has twelve keys and **no numbers at all**. Not a zero, an absence: a `"bps": 0`
-would read as zero-percent coverage and be indistinguishable from a genuine finding that the
-issuer holds nothing. Omission cannot be misread. The same distinction is inside the signature,
-which is why it cannot be re-labelled: refusals are signed as either `AssetRefusal` or
+**All three were computed from fixture figures, and each says so in its own `feed` field.** What
+they prove is the machinery: the signature, the arithmetic, the payment and its absence, and the
+anchoring. They are not coverage readings. Each also names the note id, oracle and chain its
+signature is bound to, and the account a charge would have credited, so a record can be checked on
+its own.
+
+Open seq 24. It carries **no figure**: no ratio, floor, block or reading. Its only numbers are the
+format version and the chain id. Not a zero, an absence: a `"bps": 0` would read as zero-percent
+coverage and be indistinguishable from a genuine finding that the issuer holds nothing. Seq 23 is
+that genuine finding, `known: true` with a zero, which is exactly the pair worth comparing. The
+distinction is inside the signature too: refusals are signed as either `AssetRefusal` or
 `EvidenceRefusal`, and the primary type is hashed into the digest, so an evidence refusal
 re-presented as an asset refusal reporting zero coverage recovers to a different address.
 
 The paid one settled for real. On
-[`0.0.7162784@1789121899.540907773`](https://testnet.mirrornode.hedera.com/api/v1/transactions/0.0.7162784-1789121899-540907773):
+[`0.0.7162784@1789172046.246807405`](https://testnet.mirrornode.hedera.com/api/v1/transactions/0.0.7162784-1789172046-246807405):
 `CRYPTOTRANSFER`, `SUCCESS`, buyer `0.0.10451088` debited 100,000 tinybar, seller `0.0.10448897`
-credited 100,000, and the whole 268,582 tinybar network fee paid by the facilitator `0.0.7162784`.
+credited 100,000, and the whole 270,175 tinybar network fee paid by the facilitator `0.0.7162784`.
 
 Proving the absence is the subtle half, because a refusal has no transaction to look up. The
-verifier takes the seller's account from the paid attestation's own transfer, lists every credit
-to it from two minutes before the refusal to five minutes after (x402's maximum authorisation
-window), and requires each credit to be claimed by some anchored attestation. A credit nobody
-signed for would be a charge for a refusal. In the canonical window the only claimed credits are
-records 17 and 20, and nothing else moved.
+verifier takes the seller's account from the record, lists every credit to it from two minutes
+before the refusal to five minutes after (x402's maximum authorisation window), and requires each
+credit to be claimed by some anchored attestation. A credit nobody signed for would be a charge for
+a refusal. In both refusals' windows the only credit is the one record 22 claims.
 
 This is not special-case code. The Hedera `exact` scheme settles after the handler returns, any
 status at or above 400 cancels it, `/settle` is never called, and the buyer's signed transfer
 expires unsubmitted. Nothing captured, nothing to refund, nothing to reconcile.
+
+Earlier encodings stay where they are, on an immutable topic, checkable under the rules of the
+version they declare: `v: 1` at sequences 1 to 16 and `v: 2` at 17 to 21
+([seq 17](https://testnet.mirrornode.hedera.com/api/v1/topics/0.0.10451091/messages/17), for
+example, is the v2 attestation, paid by
+[`0.0.7162784@1789121899.540907773`](https://testnet.mirrornode.hedera.com/api/v1/transactions/0.0.7162784-1789121899-540907773)).
 
 [ERC-8004 registration](https://testnet.mirrornode.hedera.com/api/v1/contracts/results/0x281a248e72f3f58a21bfc8b7ba868268f5b9ffadf166e6f91081cb07d384646c)
 on the identity registry, and the buyer's
 [`giveFeedback`](https://testnet.mirrornode.hedera.com/api/v1/transactions/0.0.10451088-1789004923-275921226),
 both `SUCCESS`.
 
-## 7. The truth layer is published and cross-checked
+## 7. The oracle accepts what the attestor signs
 
-[**`plimsoll-erc4626@v0.1.1` on substreams.dev**](https://substreams.dev/packages/plimsoll-erc4626/v0.1.1).
-Stream it with `substreams gui plimsoll-erc4626@v0.1.1`.
+Until format v3, the attestor signed a payload `CoverageOracle` could not verify: a different
+domain, a `string` note id, `uint32` coverage and a random nonce. The contract was not redeployed;
+the attestor adopted the struct the contract recovers. That was then tested on chain:
 
-What is published is the **Ethereum mainnet** layer: nine modules of ours plus Pinax's imported
-`erc4626:map_events`, giving the vault registry, the normalised share-price series with entry and
-exit rates kept apart, TVL, and Messari Yield Aggregator v1.3.1 entities. Its manifest declares
-`network: mainnet` and contains no `map_positions`. Base and per-holder positions are v0.2.0,
-built in this repository and not published (see Pending, below). The published package's embedded
-README is v0.2.0's by mistake, so the registry page describes Base and positions that are not in
-it; a corrected v0.1.2 is being cut, and the manifest is the authority in the meantime.
+| What | Result on chain |
+|---|---|
+| a PLIM-B attestation submitted to `CoverageOracle` | SUCCESS, `AttestationAccepted`, stored at 15000 bps · [`0xc0370dfa…`](https://testnet.mirrornode.hedera.com/api/v1/contracts/results/0xc0370dfaea84d47ac6783df5d55f35f579af218951eeee2a0c470e542e422439) |
+| the same attestation submitted again | REVERTED `0x348ad525` `StaleAttestation(1789170005, 1789170005)` · [`0x4b414352…`](https://testnet.mirrornode.hedera.com/api/v1/contracts/results/0x4b414352cb6d0aa671a81966692877528d7d90db191133dc3899e7934ae36c04) |
+
+Acceptance requires the signature to recover to the attestor registered for the note, so this
+proves the two implementations of the digest agree, and that a replayed nonce is refused.
+
+**It proves nothing about backing.** That attestation was signed over test figures from the
+attestor's checked-in fixture, not over any vault, and it must never be read as a coverage
+reading. It was also built to expire: it lapsed five minutes after it was stored, and it commits to
+the placeholder vault set retired since (section 8), so it can never count again. Read today,
+`CoverageOracle.coverageOf` for PLIM-B returns `Unproven` with reason `AttestationExpired`.
+
+## 8. The backing is named on chain
+
+Both notes now carry their real vault sets. `CoverageOracle` never computes the hash, it only
+compares, so there is one definition: the attestor's `canonicalHash` over the lowercase, sorted
+vault list. Each hash below was recomputed with that code
+(`packages/contracts/script/vault-set-hash.mjs`) and matched against `CoverageOracle.noteOf` read
+on chain.
+
+| Note | `setVaultSet` | Moved from | To |
+|---|---|---|---|
+| PLIM-B | SUCCESS · [`0x407cda62…`](https://testnet.mirrornode.hedera.com/api/v1/contracts/results/0x407cda62faf600ddb822cf83d31d32856e128a2def12d010273e29af9f48bc48) | `PLACEHOLDER-NOT-A-VAULT-SET` as bytes32 ASCII | `0xb1e9d3e61ec546b9efbea1d67b18058f2e9563e19c0a46491a86a05bc004f81e` |
+| PLIM-A | SUCCESS · [`0xa85d21d5…`](https://testnet.mirrornode.hedera.com/api/v1/contracts/results/0xa85d21d57d864a55208a18774b30066fe412097aec6dd5130520bbebc21d0fa3) | `0x2627c1d5…9d57`, `sha256("plimsoll/vaults/v1")` from a one-off bootstrap | `0xbaf33c99aa83d554b782e7dc98ad3e0f5e8838abfdd64c125f0a2e9627d8fa5c` |
+
+Both transactions emitted `VaultSetMoved` with exactly those previous and current values.
+
+The vaults are four protocols on Base. Every one was read on chain: `asset()` is native USDC,
+[`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`](https://basescan.org/address/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913),
+in all four.
+
+| Note | Vault | Address |
+|---|---|---|
+| PLIM-B | Gauntlet USDC Prime (Morpho), `gtUSDCp` | [`0xeE8F4eC5672F09119b96Ab6fB59C27E1b7e44b61`](https://basescan.org/address/0xeE8F4eC5672F09119b96Ab6fB59C27E1b7e44b61) |
+| PLIM-B | Wrapped Aave Base USDC, `waBasUSDC` | [`0xC768c589647798a6EE01A91FdE98EF2ed046DBD6`](https://basescan.org/address/0xC768c589647798a6EE01A91FdE98EF2ed046DBD6) |
+| PLIM-B | Spark USDC Vault, `sUSDC` | [`0x3128a0F7f0ea68E7B7c9B00AFa7E41045828e858`](https://basescan.org/address/0x3128a0F7f0ea68E7B7c9B00AFa7E41045828e858) |
+| PLIM-A | Fluid USD Coin, `fUSDC` | [`0xf42f5795D9ac7e9D757dB633D693cD548Cfd9169`](https://basescan.org/address/0xf42f5795D9ac7e9D757dB633D693cD548Cfd9169) |
+
+The two sets are disjoint on purpose: one position backs one note. The same lists are in
+[`packages/substreams/notes.json`](packages/substreams/notes.json) and in the deployment record.
+
+**Not yet deposited.** At Base block 51,234,844 the issuer,
+`0xa9f24d9633bf74d4893c6687cd2c9f4ecd6f413a`, held zero shares in all four vaults. See Pending.
+
+## 9. The truth layer is published and cross-checked
+
+[**`plimsoll-erc4626@v0.2.0` on substreams.dev**](https://substreams.dev/packages/plimsoll-erc4626/v0.2.0).
+Stream it with `substreams gui plimsoll-erc4626@v0.2.0`.
+
+It covers **Ethereum mainnet and Base** with twelve modules, eleven of ours plus Pinax's imported
+`erc4626:map_events`: the vault registry, the normalised share-price series with entry and exit
+rates kept apart, TVL, Messari Yield Aggregator v1.3.1 entities, `store_asset_prices`, and
+`map_positions`, which reads a nominated holder's `balanceOf` and `convertToAssets` for coverage.
+Checked by fetching the artifact from the registry by name rather than reading the page: 1,004,192
+bytes, sha256 `3be7c4634e741f3bc720791594f92c743c7848d55bcdf63acc740befcaef52a7`, with the eleven
+module declarations above and Base's network parameters inside it.
+
+**Version history, briefly.** [v0.1.1](https://substreams.dev/packages/plimsoll-erc4626/v0.1.1)
+was a mainnet-only package that shipped carrying the wrong README: the CLI embeds whichever
+`README.md` sits beside the manifest, so its embedded documentation names `map_positions` nine
+times and `store_asset_prices` three, neither of which it contains. We found it by grepping the
+packed artifact rather than trusting the source. A registry version can only be superseded, so
+[v0.1.2](https://substreams.dev/packages/plimsoll-erc4626/v0.1.2) was cut as a mainnet-only
+release whose documentation names neither, and `packages/substreams/scripts/check_package.py` was
+written to catch the defect: it reads the module list out of the packed artifact and fails when the
+embedded documentation names a module that is not there. v0.2.0 is the full release.
 
 It builds on Pinax's extractor, imported by
 [pinned commit](https://raw.githubusercontent.com/pinax-network/substreams-evm/1535a557975fb79d1e78517bf3e5bd6d18a1635a/spkg/erc4626-v0.1.0.spkg)
@@ -230,15 +305,16 @@ Cross-checked against archive RPCs that are not the stream provider, over 5,000 
   asset-wei and one share-wei per event plus print resolution. The one visible `state_price`
   residual, 5.7e-4 bp on Euler, is explained by the EVK's 1e6-wei virtual deposit rather than
   waved at.
-- Positions were cross-checked wei-exact **90/90 on Base and 10/10 on mainnet**, with the
-  unpublished v0.2.0.
+- **Positions are wei-exact, 90/90 on Base and 10/10 on mainnet**, read on public holders'
+  positions. The issuer's own address, nominated in the same Base run, read exactly zero shares:
+  a successful call returning zero, not a failed one.
 
 The correctness argument is not theoretical. Topic0-only matching admits any contract with a
 same-signature event: 5 of 126 emitters failed the `asset()` probe in the first 300 blocks, and
 one that passed it reported 170 USDC of assets against 96.9M shares and produced 95% of the whole
 chain's apparent fee revenue until `rates_consistent` caught it.
 
-## 8. The upstream contribution
+## 10. The upstream contribution
 
 [hedera-dev/hedera-harness#55](https://github.com/hedera-dev/hedera-harness/pull/55), open,
 +330/−51 across 18 files, into `dev`.
@@ -261,32 +337,17 @@ it would silently orphan the cache from all three.
 Nothing in this section is claimed as done. It is here so that nothing above has to be read
 generously.
 
-**The Substreams registry entry covers mainnet only.** v0.2.0, which adds Base and the
-per-holder `map_positions` module that note coverage actually depends on, is built in this
-repository and deliberately not published while the backing vault list is unsettled.
-`https://substreams.dev/packages/plimsoll-erc4626/v0.2.0` returns 404 today, correctly.
-
-**No live coverage figure exists yet.** Both notes are registered with placeholder vault sets
-(PLIM-A's is `sha256("plimsoll/vaults/v1")` from a one-off bootstrap, PLIM-B's is the readable
-ASCII `PLACEHOLDER-NOT-A-VAULT-SET`), the vault lists in `notes.json` are empty, and the issuer's
-Base positions are not funded. So both notes refuse for an **evidence** reason, `VaultSetChanged`
-on chain and `vault_set_drift` in the services. That is the correct behaviour of a system that
-refuses to guess, and it is also the honest statement that the end-to-end coverage number has not
-been produced.
-
-**Nothing the attestation service has signed can be verified on chain yet.** Its EIP-712 payload
-does not match `CoverageOracle`'s: different domain, no `verifyingContract`, `noteId` as `string`
-rather than `bytes32`, coverage `uint32` rather than `uint64`, and a random `bytes32` nonce rather
-than a monotonic `uint64`. The contract is not being redeployed; the service is adopting the
-contract's format, which keeps `LoadLine`, the cash token and the whole verified record intact.
-Until that lands, three checks in the one command fail, and this is the only reason they fail.
-
-**The x402 records will be re-run to encoding `v: 3`** once that change is in, producing a fresh
-canonical set of HCS sequence numbers. The `v: 2` records above stay exactly where they are, on an
-immutable topic, verifiable under the rules of the version they declare.
+**No live coverage figure exists yet.** The vault sets are real and on chain, but the issuer's Base
+positions are not funded: zero shares in all four vaults at Base block 51,234,844. So no attestation
+has been made over the real sets, and both notes refuse for an **evidence** reason: PLIM-A reads
+`NoAttestation` on chain, PLIM-B `AttestationExpired`. Every anchored record so far was computed
+from fixture figures, and the one attestation `CoverageOracle` has stored was signed over test
+figures. That is the correct behaviour of a system that refuses to guess, and it is also the honest
+statement that the end-to-end coverage number has not been produced.
 
 **PLIM-B is ready to list but not listed, and its coupon schedule is created but not armed.**
-Both wait on a clear load line, which waits on the two items above. The escrow allowance is
+Both wait on a clear load line, which waits on funded positions and a fresh attestation over the
+real vault set. The escrow allowance is
 [already approved on chain](https://testnet.mirrornode.hedera.com/api/v1/contracts/results/0x3c21e6fd338b4d24f540469f2e7d85577d804604961aba95d3e9848f00587fba)
 and the [schedule is created](https://testnet.mirrornode.hedera.com/api/v1/contracts/results/0x254ab7165b0db20bcc153ba4b7dc68117555bd923c285a052eae395246562eb4).
 
@@ -297,6 +358,5 @@ facet, so `addKpiData` returns `FunctionNotFound`. The scheduler catches it and 
 
 ## Links that did not resolve
 
-None of the links on this page failed when checked on 2026-09-12. Two things are named here rather
-than linked, because they do not exist yet: the v0.2.0 registry entry, and any on-chain-verifiable
-attestation. Both are in Pending above.
+None of the links on this page failed when checked on 2026-09-13. One thing is named here rather
+than linked, because it does not exist yet: an attestation over real, funded positions.

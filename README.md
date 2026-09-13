@@ -39,19 +39,20 @@ npm --prefix packages/verify run verify
 ```
 
 No keys, no wallet, no account. It reads the deployment records in this repository and checks
-them against the public Hedera mirror node, Sourcify and GitHub: every contract live and an exact
-source match, every transaction with the result the record claims, the reverts decoded from the
-contracts' own error ABI, each device signature recovered offline from the exact text the device
-displayed, and the paid attestation's transfer present while the refusals' transfers are absent.
+them against the public Hedera mirror node, Sourcify, GitHub and substreams.dev: every contract live
+and an exact source match, every transaction with the result the record claims, the reverts
+decoded from the contracts' own error ABI, each device signature recovered offline from the exact
+text the device displayed, and the paid attestation's transfer present while the refusals'
+transfers are absent.
 
 The first run installs and builds what it needs and takes a few minutes. After that it takes
 seconds. Three outcomes, and no fourth: a line passes, fails, or is skipped with its reason.
 Nothing that could not be checked is reported as a pass.
 
-**Last full run, 2026-09-12: 42 passed, 3 failed, 5 skipped.** The three failures are all in the
-x402 section and have one cause, stated in [CLAIMS.md](CLAIMS.md): the attestation service is
-mid-migration onto the coverage oracle's signature format. Excluding that section
-(`-- --only 1,2,3,4,6,7,8`), the same run is 36 passed, 0 failed, 5 skipped.
+**Last full run, 2026-09-13: 46 passed, 0 failed, 5 skipped.** One thing that run cannot tell you
+on its own, so it is said here: the anchored attestation records it checks were computed from
+fixture readings, and each record says so in its own `feed` field. No live coverage figure exists
+yet; [MOCKS.md](MOCKS.md) says exactly why.
 
 ## How the pieces fit
 
@@ -93,8 +94,8 @@ and `CashLegController` never called again, a frozen payer still cannot pay a co
 
 | Package | What it is |
 |---|---|
-| [`packages/substreams`](packages/substreams) | `plimsoll_erc4626`, a Substreams package over Pinax's ERC-4626 event extractor: vault registry, entry and exit rates kept apart, TVL, per-holder positions, and Messari Yield Aggregator v1.3.1 entities. [v0.1.1 is published](https://substreams.dev/packages/plimsoll-erc4626/v0.1.1) and is the **Ethereum mainnet** layer: nine modules plus Pinax's imported one, and no positions. Base and per-holder positions are v0.2.0, built here and not yet published. |
-| [`packages/attestor`](packages/attestor) | The coverage attestation service. x402 on Hedera through the hosted Blocky402 facilitator: an attestation costs 0.001 HBAR, a refusal costs nothing and is signed anyway. Every verdict is anchored to an immutable HCS topic. |
+| [`packages/substreams`](packages/substreams) | `plimsoll_erc4626`, a Substreams package over Pinax's ERC-4626 event extractor: vault registry, entry and exit rates kept apart, TVL, per-holder positions, and Messari Yield Aggregator v1.3.1 entities. [v0.2.0 is published](https://substreams.dev/packages/plimsoll-erc4626/v0.2.0): Ethereum mainnet and Base, twelve modules including `map_positions`. |
+| [`packages/attestor`](packages/attestor) | The coverage attestation service. x402 on Hedera through the hosted Blocky402 facilitator: an attestation costs 0.001 HBAR, a refusal costs nothing and is signed anyway. Every verdict is anchored to an immutable HCS topic, and the signed attestation is the struct `CoverageOracle` recovers. |
 | [`packages/authority`](packages/authority) | The device half. A privileged action needs a signature that only exists if a human approved a plain-English mandate on a Ledger device. A rejection returns `6985` and produces no signature at all. |
 | [`packages/contracts`](packages/contracts) | `CoverageOracle`, `LoadLine`, `BerthMarket`, `CouponScheduler`, `CashLegController`, `MandateVerifier` and its adapter. Deployed and Sourcify-verified on Hedera testnet. 201 Foundry tests. |
 | [`packages/mcp`](packages/mcp) | The coverage feed as reusable infrastructure over MCP (Streamable HTTP) with an A2A card. Every answer carries provenance: package sha256, module hash, endpoint, block, finality and stream lag. Stale or unresolved data is refused, never guessed. |
@@ -117,7 +118,7 @@ cd packages/substreams
 substreams run substreams.yaml map_vault_blocks \
   -e mainnet.eth.streamingfast.io:443 -s 25940000 -t +300 -o jsonl
 # or take the published package and build nothing:
-substreams gui plimsoll-erc4626@v0.1.1
+substreams gui plimsoll-erc4626@v0.2.0
 
 # the attestation service, entirely offline, no credentials
 cd packages/attestor && npm install && npm run demo

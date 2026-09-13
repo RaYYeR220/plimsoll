@@ -9,19 +9,17 @@ npm --prefix packages/verify run verify
 ```
 
 It reads the deployment records in this repository and checks them against the public Hedera
-mirror node, Sourcify and GitHub. Every line is a pass, a fail, or a skip with its reason.
-Nothing that could not be checked is reported as a pass, and a superseded deployment is listed as
-history rather than quietly verified as live.
+mirror node, Sourcify, GitHub and substreams.dev. Every line is a pass, a fail, or a skip with its
+reason. Nothing that could not be checked is reported as a pass, and a superseded deployment is
+listed as history rather than quietly verified as live.
 
-**What it printed on 2026-09-12: 42 passed, 3 failed, 5 skipped.** Add `-- --links` for a public
+**What it printed on 2026-09-13: 46 passed, 0 failed, 5 skipped.** Add `-- --links` for a public
 URL beside each line, or `-- --json` for machine-readable output.
 
-The three failures are one problem, and the honest statement of it is this: the attestation
-service signs EIP-712 over a payload that does not match the one `CoverageOracle` verifies, so no
-attestation it has produced could be checked on chain. It is being migrated onto the contract's
-format, the contract is not being redeployed, and until that lands the x402 signature checks
-fail. Everything else passes: `-- --only 1,2,3,4,6,7,8` gives 36 passed, 0 failed, 5 skipped.
-[CLAIMS.md](CLAIMS.md) says what that does and does not invalidate.
+Read section 5 with one fact in mind. It proves the x402 records are signed, paid or not paid, and
+anchored exactly as they claim, and it recomputes every ratio. It does not prove the readings are
+real, because they are not: every canonical record was computed from fixture figures, and each
+says so in its own `feed` field, which the verifier prints on every line.
 
 ## 2. Three links that carry the whole claim
 
@@ -44,13 +42,14 @@ detail. The market never reaches that revert, because it pre-flights both legs f
 [`0xc77864c9…7d8c`](https://hashscan.io/testnet/transaction/0xc77864c93ff5dfab65b93881f26785979a3c9a85713e01f41b72ad73182a7d8c)
 ([mirror node](https://testnet.mirrornode.hedera.com/api/v1/contracts/results/0xc77864c93ff5dfab65b93881f26785979a3c9a85713e01f41b72ad73182a7d8c)).
 
-**A refusal that was signed and not charged.** HCS sequence 19 on topic `0.0.10451091` is an
-evidence refusal of 365 bytes with twelve keys and no numbers anywhere in it:
-[read it on the mirror node](https://testnet.mirrornode.hedera.com/api/v1/topics/0.0.10451091/messages/19).
-Sequence 17, the attestation, cites its settlement, and
-[that transfer exists](https://testnet.mirrornode.hedera.com/api/v1/transactions/0.0.7162784-1789121899-540907773).
-For 18 and 19 there is no transfer to find, which is the point: the refusal is free by
-construction, not by refund.
+**A refusal that was signed and not charged.** HCS sequence 24 on topic `0.0.10451091` is an
+evidence refusal of 539 bytes that carries no figure: its only numbers are its format version and
+the chain id its signature is bound to.
+[Read it on the mirror node](https://testnet.mirrornode.hedera.com/api/v1/topics/0.0.10451091/messages/24).
+Sequence 22, the attestation, cites its settlement, and
+[that transfer exists](https://testnet.mirrornode.hedera.com/api/v1/transactions/0.0.7162784-1789172046-246807405).
+For 23 and 24 there is no transfer to find, which is the point: the refusal is free by
+construction, not by refund. All three were computed from fixture figures and say so.
 
 [PROOF.md](PROOF.md) has the rest, grouped by claim, every line a link.
 
@@ -75,6 +74,11 @@ not, is anchored to an immutable HCS topic under the 1024-byte single-chunk limi
 worth your time is `verify-charge`, which needs no access to our infrastructure and proves the
 biconditional: charge present if and only if attestation warranted.
 
+The attestation it sells is the struct `CoverageOracle` recovers. `CoverageOracle` accepted one on
+chain and refused a replay of its nonce ([PROOF.md](PROOF.md#7-the-oracle-accepts-what-the-attestor-signs)).
+That attestation was signed over test figures, so it proves signature compatibility and nothing
+about backing.
+
 **The cash leg at consensus.** [`packages/contracts/README.md`](packages/contracts/README.md),
 "The cash leg". Token `0.0.10474297`'s freeze key is a contract-ID key naming
 `CashLegController`, and there is **no admin key**, so it can never be rotated away.
@@ -91,17 +95,19 @@ with Linux verified unchanged in a container.
 ### The Graph
 
 [`packages/substreams/README.md`](packages/substreams/README.md), and the package on the registry:
-[`plimsoll-erc4626@v0.1.1`](https://substreams.dev/packages/plimsoll-erc4626/v0.1.1), streamable
-with `substreams gui plimsoll-erc4626@v0.1.1`.
+[`plimsoll-erc4626@v0.2.0`](https://substreams.dev/packages/plimsoll-erc4626/v0.2.0), streamable
+with `substreams gui plimsoll-erc4626@v0.2.0`. Ethereum mainnet and Base, twelve modules (eleven
+of ours plus Pinax's imported `erc4626:map_events`): the vault registry, the share-price series,
+the Messari entities, and `map_positions`, which reads a nominated holder's positions for coverage.
 
-**Be precise about what is published.** v0.1.1 is the **Ethereum mainnet** layer: nine modules of
-ours plus Pinax's imported `erc4626:map_events`, giving the vault registry, the share-price series
-and the Messari entities. Base support and per-holder positions are v0.2.0, built in this
-repository and deliberately not published while the backing vault list is unsettled. Note
-coverage depends on that unpublished module. One caveat we would rather state than have found:
-v0.1.1 carries v0.2.0's README inside it by mistake, so the registry page describes Base and
-positions the published modules do not contain. The manifest is the authority (`network: mainnet`,
-no `map_positions`), and a corrected v0.1.2 is being cut.
+**Open v0.2.0.** The version history is short and worth one paragraph. v0.1.1 shipped carrying the
+wrong README: the CLI embeds whichever `README.md` sits beside the manifest, so a correct
+mainnet-only manifest went out describing Base and positions it did not contain. We found it by
+grepping the packed artifact rather than trusting the source. A registry version can only be
+superseded, never replaced, so v0.1.2 was cut as a mainnet-only release with a description scoped
+to its contents, and `packages/substreams/scripts/check_package.py` was written to catch the
+defect: it reads the module list out of the packed artifact and fails when the embedded
+documentation names a module that is not there, which v0.1.1's does. v0.2.0 is the full release.
 
 It imports Pinax's ERC-4626 extractor by pinned commit and runs it unchanged, so their server-side
 cache is reused, then builds the derived layer they deliberately left out and fixes the three
@@ -110,11 +116,12 @@ any same-signature contract through, and one such contract, reporting 170 USDC o
 96.9M shares, produced 95% of the whole chain's apparent fee revenue until the consistency flag
 caught it.
 
-The numbers are cross-checked against archive nodes that are not the stream provider. On mainnet,
-with the published layer: `totalAssets` exact to the wei 348/348, EIP-4626 rate ordering 226/226
-and 247/247, and every one of 473 rate deviations inside a per-row bound derived from rounding.
-The one visible residual is explained by Euler's virtual deposit rather than waved at. Positions
-were cross-checked wei-exact 90/90 on Base and 10/10 on mainnet, with the unpublished v0.2.0.
+The numbers are cross-checked against archive nodes that are not the stream provider. On mainnet:
+`totalAssets` exact to the wei 348/348, EIP-4626 rate ordering 226/226 and 247/247, and every one
+of 473 rate deviations inside a per-row bound derived from rounding. The one visible residual is
+explained by Euler's virtual deposit rather than waved at. Positions were cross-checked wei-exact,
+90/90 on Base and 10/10 on mainnet, on public holders' positions; the issuer's own address read
+exactly zero.
 
 [`packages/mcp/README.md`](packages/mcp/README.md) is the same data as infrastructure another
 system can consume: provenance on every answer, and a typed refusal rather than the last good
@@ -143,8 +150,12 @@ documented nowhere.
 
 ## Worth knowing before you judge
 
-Both notes are registered with placeholder vault sets, so both currently refuse for an
-**evidence** reason rather than as short notes. That is the intended behaviour of a system that
-refuses to guess, and it is also the honest statement that no live coverage figure has been
-produced yet. [MOCKS.md](MOCKS.md) is the exact line between what runs against live data and what
-runs against fixtures, per component.
+The backing is named on chain but not yet deposited. Both notes carry their real Base vault sets
+in `CoverageOracle`, each hash equal to the attestor's canonical hash of the listed vaults: three
+native-USDC vaults for PLIM-B, and Fluid USDC alone for PLIM-A, so no position can back both. At
+Base block 51,234,844 the issuer held zero shares in all four. With nothing to read and no
+attestation over the real sets, both notes refuse for an **evidence** reason: PLIM-A reads
+`NoAttestation`, PLIM-B `AttestationExpired`. That is a system refusing to guess, and it is also
+the honest statement that **no live coverage figure has been produced yet.**
+[MOCKS.md](MOCKS.md) is the exact line between what runs against live data and what runs against
+fixtures, per component.

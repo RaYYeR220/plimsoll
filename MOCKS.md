@@ -15,9 +15,10 @@ Unflattering by design. If you are looking for the weak seam, it is section 2.
 | Contracts, tested | the contracts themselves | ATS, HTS and the schedule service are mocked inside `forge test`, then probed against live state on a fork |
 | Cash leg | the HTS token, its contract-ID freeze key, the absent admin key | no breach has been tripped on the live token |
 | Device authority | the app, the firmware status words, the signatures, the on-chain sequence | the device is Ledger's emulator, not hardware |
-| Attestation service | decision logic, signing, x402 payment, HCS anchoring, keyless verification | **the coverage readings themselves are fixtures** |
+| Attestation service | decision logic, signing in a format the oracle accepts, x402 payment, HCS anchoring, keyless verification | **every anchored reading so far is a fixture**, and each record says so |
+| Backing | the vault sets, registered on chain; four real native-USDC vaults on Base | nothing, but nothing is deposited yet either |
 | Truth layer (mainnet) | live streams, live `eth_call`s, cross-checked against independent archive nodes | nothing |
-| Truth layer (Base positions) | live streams and readings, cross-checked wei-exact | the issuer's own position is unfunded, so there is nothing to read |
+| Truth layer (Base positions) | live streams and readings, cross-checked wei-exact on public holders | the issuer's own position is unfunded, so there is nothing of ours to read |
 | Coverage feed | replayed **recorded real** stream output | note coverage uses placeholder notes and synthetic readings |
 | Web surface | the links and the deployment records it reads | the coverage figure on screen is a demonstration state |
 
@@ -51,18 +52,26 @@ note has a coverage reading yet.
 
 ## 2. The attestation service, which is the weak seam
 
-**`packages/attestor/src/coverage/fixtures/*.json` is the only working coverage source today.**
-
-The production source is the Substreams pipeline. `LiveCoverageSource` is its typed placeholder
-and throws `SourceUnavailable` on every call. That is deliberate rather than unfinished: a source
-returning a plausible number from an incomplete index would produce a signed attestation nobody
-can reproduce, which is the exact failure this product exists to prevent. Setting
-`COVERAGE_SOURCE=live` today yields a service that refuses every request with
-`source_unavailable`, and that behaviour is covered by a test.
+**Every record anchored so far was computed from `packages/attestor/src/coverage/fixtures/*.json`,
+and each one says so in its own `feed` field.** That includes the three canonical records, 22, 23
+and 24. The field is in the record rather than only in this file because an HCS message outlives
+every document that explains it, and without it a reader could not tell a demonstration from a
+measurement: the signature, the arithmetic, the payment and the anchoring are equally real either
+way. The verifier prints it on every line of its x402 section.
 
 **The vault addresses in the fixtures are not deployed contracts.** They are syntactically valid
-addresses over invented balances. Nothing in that package has ever called `convertToAssets` on a
-real vault.
+addresses over invented balances.
+
+**The one attestation `CoverageOracle` has stored is a fixture too.** It was submitted to prove
+that the attestor's EIP-712 digest and the contract's agree, and it did: the oracle recovered the
+registered attestor and stored it, then refused the same nonce a second time. It was signed over
+test figures, it expired five minutes later, and it commits to a vault set that has since been
+retired. It is evidence of signature compatibility and of nothing else.
+
+A live coverage source exists in the package (`src/coverage/live.ts`): it reads positions on Base
+by `eth_call` pinned to one block, and the note's liabilities on Hedera, and it refuses when it is
+not configured. **No anchored record has come from it**, because there is not yet a funded position
+for it to read.
 
 What the fixtures stand in for, field by field, is tabulated in
 [`packages/attestor/MOCKS.md`](packages/attestor/MOCKS.md): share balances, `convertToAssets`
@@ -73,15 +82,13 @@ the observation block and time, and the source set.
 arithmetic is correct and reproducible from the published inputs, that the anchored record matches
 the evidence and the signature, that the ledger agrees about what moved, and that a charge exists
 if and only if an attestation was warranted. It does **not** prove that the readings match chain
-state, because there is no chain state to compare against. When the live source lands, the same
-verifier gains exactly one more check, re-reading the vaults at `asOfBlock`, and nothing else
-about it changes. That is the point of putting the seam there.
+state, because the fixture vaults have no chain state to compare against.
 
 The question worth asking is whether the fixture source hides a problem real data would expose.
 The parts that would change are the readings. The parts that would not are the decision rules, the
 two refusal families, the signing, the payment flow, the anchoring format and the verification.
 Every refusal reason, including all five evidence-family ones, is reachable and tested, because
-the fixture source implements the same failure contract the live one will.
+the fixture source implements the same failure contract the live one does.
 
 **The offline demo signs with a well-known throwaway key**, checked in and clearly labelled. It
 holds nothing and signs only fixture verdicts. The deployed service uses a key from its
@@ -99,7 +106,7 @@ renders, the firmware status words it returns, the signatures it produces, and e
 those signatures authorised on chain.
 
 **Simulated:** the hardware. This is Ledger's own Speculos emulator, because we have no physical
-device. The seed is freshly generated and private, deliberately not the public Speculos test
+device. The seed is freshly created and private, deliberately not the public Speculos test
 mnemonic whose address anyone can sign for, so the deployed verifier trusts a key nobody else
 holds. What emulation does not give you is a secure element: an emulator's seed exists as a string
 on the machine running it. The DMK path was cross-checked against a raw APDU and returned a
@@ -116,25 +123,27 @@ loop, which is the exact thing the package exists to prevent.
 **Real, on Ethereum mainnet.** Live streams from The Graph Market, live `eth_call`s pinned by the
 host to the hash of the block being processed, and cross-checks against archive RPCs that are not
 the stream provider: `totalAssets` exact to the wei 348/348, EIP-4626 rate ordering 226/226 and
-247/247, and all 473 rate deviations inside a per-row rounding bound. This is the layer that is
-[published](https://substreams.dev/packages/plimsoll-erc4626/v0.1.1).
+247/247, and all 473 rate deviations inside a per-row rounding bound.
 
-**Real, on Base, but unpublished and unfunded.** Per-holder positions run live: 300 blocks from
-51,180,961 on The Graph Market, backfilling 48,919 blocks of stores, with every reading
-cross-checked wei-exact against drpc, Tenderly and Blast, 90/90. One of the two nominated holders
-in that run was the issuer address, and it returned exactly `0` shares. That is a successful call
-returning zero, which is not the same as a failed call, and the distinction is carried through the
-whole pipeline: if any call reverts, the position is `ok = false` and its amounts are **empty,
-never zero**, because a zero reads as a finding.
+**Real, on Base, and published, but not yet about us.** Per-holder positions run live: 300 blocks
+from 51,180,961 on The Graph Market, backfilling 48,919 blocks of stores, with every reading
+cross-checked wei-exact against drpc, Tenderly and Blast, 90/90. Those readings are of public
+holders' positions. The issuer address, nominated in the same run, returned exactly `0` shares.
+That is a successful call returning zero, which is not the same as a failed call, and the
+distinction is carried through the whole pipeline: if any call reverts, the position is
+`ok = false` and its amounts are **empty, never zero**, because a zero reads as a finding.
 
-The module that does this is v0.2.0, built in this repository and deliberately not published while
-the vault list is unsettled.
+Both halves are in
+[`plimsoll-erc4626@v0.2.0`](https://substreams.dev/packages/plimsoll-erc4626/v0.2.0), the published
+release, which covers mainnet and Base and declares `map_positions`.
 
 **Not simulated anywhere, including the failures.** The correctness holes this package fixes were
 found in live data, not imagined: 5 of 126 emitters failing the `asset()` probe in 300 blocks, and
 a contract reporting 170 USDC of assets against 96.9M shares producing 95% of the chain's apparent
 fee revenue. One of its own flags had a hole too, found by replaying recorded live output through
-the coverage feed, which is why v0.1.0 was never published.
+the coverage feed, which is why v0.1.0 was never published. And one release shipped describing
+modules it did not contain, which is why v0.1.1 is superseded and a pre-publish check now reads the
+module list out of the packed artifact.
 
 ## 5. The coverage feed
 
@@ -148,7 +157,7 @@ field, with package sha256, module hash, endpoint and recording time. The single
 skipped unless a token is present.
 
 **Synthetic, and labelled:** note coverage is tested against placeholder notes, synthetic position
-readings and a stand-in registry, because no note has a final vault list. The test headers say so.
+readings and a stand-in registry. The test headers say so.
 
 ## 6. The web surface
 
@@ -167,13 +176,15 @@ A green check is worthless if nothing could have turned it red. So there is a no
 always fail.
 
 **PLIM-A** is a real ATS bond with a real on-chain obligation of **$1,000,000**: 10,000.00 notes
-outstanding at a par of 100.00, both read from the chain. The backing behind it is roughly $15 on
-Base. It must refuse, forever, on real numbers, and any run in which PLIM-A clears is a bug in us,
-not good news. The coverage feed's test suite treats a clearing control as a failure of its own
-(`controlViolated`), rather than trusting anyone to notice.
+outstanding at a par of 100.00, both read from the chain. Its vault set is registered on chain,
+Fluid USDC alone, and the planned backing behind it is roughly $15. It must refuse, forever, on real
+numbers, and any run in which PLIM-A clears is a bug in us, not good news. The coverage feed's test
+suite treats a clearing control as a failure of its own (`controlViolated`), rather than trusting
+anyone to notice.
 
-**PLIM-B** is the same machinery sized honestly: a $10.00 obligation against the same roughly $15
-of backing. It is the note that should clear, once there is something to read.
+**PLIM-B** is the same machinery sized honestly: a $10.00 obligation against a planned backing of
+roughly $15 across three vaults, disjoint from PLIM-A's. It is the note that should clear, once
+there is something to read.
 
 The pair is deliberate. One note that passes proves the happy path works. One note that must fail
 proves the check is load-bearing. Together they prove the difference between the two is coming
@@ -181,36 +192,37 @@ from the data rather than from us.
 
 Two honest wrinkles about the control:
 
-- At 0.15 bps, PLIM-A's coverage floors to `0` on chain, so the chain alone cannot tell the
+- At 0.15 bps, PLIM-A's coverage would floor to `0` on chain, so the chain alone cannot tell the
   control from a note with no position at all. The reason code and the detail carry the
   distinction, which is why a refusal here never quotes basis points alone.
-- Until `setVaultSet` lands, PLIM-A refuses for an **evidence** reason (`VaultSetChanged`) rather
-  than as a short note. It still refuses, and it refuses for a defensible reason, but the reason
-  is about our evidence rather than about its backing. That is not the refusal we want from it,
-  and we would rather say so than let a red mark stand in for the red mark we meant.
+- The refusal we want from PLIM-A is an **asset** finding: "short", with the figure. HCS record 23
+  is exactly that shape, `coverage_below_floor` with a known zero, but it was computed from fixture
+  figures. On chain today PLIM-A refuses for an **evidence** reason instead, `NoAttestation`,
+  because nothing has attested it over its real vault set. It still refuses, and for a defensible
+  reason, but the reason is about our evidence rather than its backing, and we would rather say so
+  than let one red mark stand in for the other.
 
 ## What has not yet run against live data
 
 Stated plainly, in one place.
 
-1. **No coverage attestation has ever been produced from a live reading.** The attestor's source
-   is fixtures. The live source refuses by design until the pipeline is wired to it.
-2. **No note has a real vault set.** Both are registered with placeholders, the vault lists in
-   `notes.json` are empty, and `scripts/check_notes.py` fails on that mismatch deliberately until
-   `setVaultSet` is called with the final lists.
-3. **The issuer's Base positions are not funded**, so even with the vault list settled there is
-   currently nothing behind either note to read.
-4. **No attestation can be verified on chain**, because the attestor's EIP-712 payload does not
-   yet match the oracle's. That work is in flight, the contract is not being redeployed, and it is
-   the sole reason three checks in the one command fail.
-5. **Nothing has been listed or matched on the live venue.** `placeAsk` calls
-   `LoadLine.requireClear`, which reads `NoAttestation`. The escrow allowance is approved on chain
-   and the fork probe shows the hold being created and executed, but no live match has happened.
-6. **No coupon has been paid, and no schedule is armed.** Arming requires a clear line.
-7. **The coverage-linked coupon rate is not active on these notes.** The ATS bond configuration
+1. **No coverage attestation has ever been produced from a live reading.** Every anchored record
+   was computed from fixtures and says so, and the one attestation stored on chain was signed over
+   test figures.
+2. **The issuer's Base positions are not funded.** The vault sets are final and registered, but at
+   Base block 51,234,844 the issuer held zero shares in all four vaults, so there is nothing behind
+   either note to read.
+3. **No attestation exists over the real vault sets.** PLIM-A reads `NoAttestation` and PLIM-B
+   `AttestationExpired` on chain.
+4. **Nothing has been listed or matched on the live venue.** `placeAsk` calls
+   `LoadLine.requireClear`, which does not read clear for either note. The escrow allowance is
+   approved on chain and the fork probe shows the hold being created and executed, but no live
+   match has happened.
+5. **No coupon has been paid, and no schedule is armed.** Arming requires a clear line.
+6. **The coverage-linked coupon rate is not active on these notes.** The ATS bond configuration
    used here registers neither the Kpis nor the KpiLinkedRate facet, so the write is refused and
    the scheduler emits `CoveragePushFailed`.
-8. **Nothing is on mainnet.**
+7. **Nothing on Hedera is on mainnet.**
 
-Every one of those is a consequence of the same two dependencies: the final Base vault list, and
-the signature-format migration. Neither is hidden, and neither is described as done.
+Items 1 to 5 wait on one thing: funded positions on Base, and a fresh attestation over them.
+Neither is hidden, and neither is described as done.

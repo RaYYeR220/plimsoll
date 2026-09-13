@@ -12,15 +12,15 @@ below reads as weaker than you expected, that is the point.
   was not read from a live source.
 - **Not claimed.** Stated so nobody has to discover it.
 
-Dates matter here. **Everything marked "re-checked 2026-09-12" was run or fetched on that date**
-for this document, not copied from an earlier note.
+Dates matter here. **Every date below is the day that line was run or fetched** for this
+document, not copied from an earlier note.
 
 ---
 
 ## Proven on chain
 
-Public, keyless, and all of it re-checked 2026-09-12 against the Hedera mirror node and Sourcify.
-Links for every line are in [PROOF.md](PROOF.md).
+Public, keyless, and all of it re-checked 2026-09-13 against the Hedera mirror node, Sourcify,
+Base and the Substreams registry. Links for every line are in [PROOF.md](PROOF.md).
 
 | Claim | Evidence |
 |---|---|
@@ -35,13 +35,17 @@ Links for every line are in [PROOF.md](PROOF.md).
 | The market stayed halted after the device declined, and resumed only after it approved | the halt, the reverted resume, and the successful resume, in order |
 | Every device signature recovers to the mandate authority, offline, from the exact text the device displayed | recovery performed locally by `packages/verify` |
 | The cash token's freeze and supply keys are contract-ID keys naming `CashLegController`, and it has no admin key, so the freeze key can never be rotated away | mirror node token record, `ProtobufEncoded` key bytes decoded |
-| Three canonical records are anchored on an immutable HCS topic, at 843, 832 and 365 bytes, all single-chunk | mirror node topic messages |
-| The evidence refusal contains no numeric field anywhere in it | read record 19 and count |
-| The attestation's settlement really happened: buyer debited 100,000 tinybar, seller credited 100,000, and the facilitator paid the entire 268,582 tinybar network fee | mirror node transaction record |
+| Three canonical records in encoding `v: 3` are anchored on an immutable HCS topic, at 963, 985 and 539 bytes, all single-chunk, each declaring `feed: fixture` | mirror node topic messages 22, 23 and 24 |
+| The evidence refusal carries no figure: its only numbers are the format version and the chain id | read record 24 |
+| The attestation's settlement really happened: buyer debited 100,000 tinybar, seller credited 100,000, and the facilitator paid the entire 270,175 tinybar network fee | mirror node transaction record |
 | No transfer exists for either refusal, and no unclaimed credit reached the seller inside x402's maximum authorisation window | mirror node account credits, cross-referenced against anchored records |
+| `CoverageOracle` accepts a signature the attestor produces, and refuses the same nonce twice | `AttestationAccepted`, then `StaleAttestation(1789170005, 1789170005)` |
+| Both notes carry their real vault-set hashes, each equal to the attestor's `canonicalHash` over the listed vaults, and the two sets are disjoint | `setVaultSet` transactions, `VaultSetMoved` events, `CoverageOracle.noteOf` read on chain, hashes recomputed locally |
+| All four backing vaults on Base are ERC-4626 vaults over native USDC | `asset()` read on Base |
+| With no attestation over the real sets, both notes refuse for an evidence reason | `coverageOf`: PLIM-A `Unproven` / `NoAttestation`, PLIM-B `Unproven` / `AttestationExpired` |
 | ERC-8004 identity registration and the buyer's `giveFeedback` both succeeded | mirror node |
 | `hedera-dev/hedera-harness#55` is open, +330/−51 across 18 files, into `dev` | GitHub API |
-| `plimsoll-erc4626@v0.1.1` is published on substreams.dev and streamable by anyone | the registry |
+| `plimsoll-erc4626@v0.2.0` is published on substreams.dev, covers Ethereum mainnet and Base, and declares `map_positions` | the artifact fetched from the registry by name, sha256 `3be7c463…52a7` |
 
 ## Proven by test
 
@@ -56,6 +60,7 @@ Links for every line are in [PROOF.md](PROOF.md).
 | The coverage feed refuses rather than serving a stale number, and no evidence refusal contains a figure anywhere in the object, proved by a deep scan that is itself tested against a planted figure | `npm --prefix packages/mcp run test:offline` | **re-run 2026-09-12: 45 passed, 0 failed** |
 | A frozen feed's cached value is never served as fresh: the clock is advanced past the threshold and the value does not appear anywhere in the refusal | same suite, "negative control" | re-run 2026-09-12 |
 | The vault-set hash the feed computes matches the attestor's own `canonicalHash`, called live | same suite | re-run 2026-09-12 |
+| Every public claim checks out against public endpoints, with no keys | `npm --prefix packages/verify run verify` | **re-run 2026-09-13: 46 passed, 0 failed, 5 skipped** |
 | Two distinct mandates cannot render as the same text on the device: each field's rendering is injective, the tuple has fixed arity and order, and no value may contain a newline, whitespace or `: ` | `npm --prefix packages/authority run test:unit` | not re-run for this document |
 | The Solidity suite verifies a signature a real device produced, and rejects every way of presenting one it did not | `packages/authority` Foundry suite | not re-run for this document |
 | The device returns `6985` on rejection and the result object carries no signature field, asserted rather than described | `packages/authority` device suite, needs the emulator running | not re-run for this document |
@@ -70,8 +75,9 @@ Real logic, stated inputs. [MOCKS.md](MOCKS.md) is the full accounting; this is 
 
 | Claim | The fixture, named |
 |---|---|
-| The coverage decision, the two refusal families, EIP-712 signing, the x402 flow, HCS anchoring and keyless re-verification all work end to end | the attestor's coverage source is `src/coverage/fixtures/*.json`. The vault addresses in them are syntactically valid and **not deployed contracts** |
-| The ratio is recomputed from published inputs by an independent verifier, proving the arithmetic, the record, the signature and the payment biconditional | proven against fixture readings. It cannot yet re-read the vaults, because those vaults do not exist |
+| The coverage decision, the two refusal families, EIP-712 signing, the x402 flow, HCS anchoring and keyless re-verification all work end to end | every canonical record was computed from `packages/attestor/src/coverage/fixtures/*.json` and says `feed: fixture`. The vault addresses in those fixtures are syntactically valid and **not deployed contracts** |
+| The ratio is recomputed from published inputs by an independent verifier, proving the arithmetic, the record, the signature and the payment biconditional | proven against fixture readings. It cannot re-read those vaults, because they do not exist |
+| The attestor's signature format is one `CoverageOracle` accepts | the one attestation stored on chain was signed over test figures from the fixture. It proves compatibility, not coverage |
 | The coverage feed's tools answer with provenance and refuse correctly on staleness, unknown vaults and self-contradictory vaults | replayed from **recorded real stream output** captured once from The Graph Market, `test/fixtures/recorded-{mainnet,base}.json`, each labelled with its package sha256, module hash, endpoint and recording time |
 | Note coverage produces the right verdict for an under-backed note, a right-sized note, an empty position and a drifted vault set | placeholder notes, synthetic position readings and a stand-in registry. The test headers say so |
 | Escrow, settlement, coupons and the circuit breaker behave as described | the contract suites drive `MockNote`, `MockHts`, `MockCash`, `MockScheduleService` and `MockMandateAuthority`, because ATS and the Hedera system contracts are not available inside `forge test`. The live behaviour was then probed on a fork of real Hedera state (`script/ProbeEscrow.s.sol`) and the two disagreed, which is how we learned an ask needs an allowance and not just operator rights |
@@ -87,7 +93,7 @@ emulator, and we have no physical device. Nothing here is a Key Ring integration
 claims to be one.
 
 **The device is emulated, with a private seed.** Speculos runs the real `app-ethereum` 1.22.3 ELF
-and returns real firmware status words, and the seed is freshly generated and not the public test
+and returns real firmware status words, and the seed is freshly created and not the public test
 mnemonic, so no one else can sign for that address. But an emulator's seed is a string on the
 machine running it. **We do not claim the signing key never exists in software**, and we do not
 claim non-extractability, which is a property of hardware rather than of anything demonstrated
@@ -103,27 +109,25 @@ person can read what they are approving, and raw hex on a four-line screen is a 
 extra steps.
 
 **Coverage below 0.005% floors to zero basis points on chain.** `coverageBps` cannot tell a tiny
-real position from none at all. PLIM-A's roughly $15 against a $1,000,000 obligation is 0.15 bps
-and reads as `0`. The refusal is correct either way, since both are far below any load line, but a
-display quoting basis points alone would make the negative control and an empty wallet look
-identical. So a refusal here never quotes basis points alone: the reason code distinguishes
-`coverage_below_floor` from `no_attributable_positions`, and the detail carries obligation and
-attributable in full.
+real position from none at all. Roughly $15 of planned backing against PLIM-A's $1,000,000
+obligation would be 0.15 bps, and reads as `0`. The refusal is correct either way, since both are
+far below any load line, but a display quoting basis points alone would make the negative control
+and an empty wallet look identical. So a refusal here never quotes basis points alone: the reason
+code distinguishes `coverage_below_floor` from `no_attributable_positions`, and the detail carries
+obligation and attributable in full.
 
-**No live coverage figure has been produced.** The Base vault list is not final, the issuer's
-positions are not funded, and both notes are registered with placeholder vault sets. Both
-therefore refuse for an evidence reason. Nothing in this repository has ever computed a coverage
-ratio from a funded position.
+**No live coverage figure has been produced.** The vault sets are final and registered on chain,
+but the issuer's positions are not funded: zero shares in all four Base vaults at block
+51,234,844. Both notes therefore refuse for an evidence reason. Nothing in this repository has ever
+computed a coverage ratio from a funded position.
 
-**Nothing the attestation service has signed can be verified on chain yet.** Its EIP-712 payload
-does not match `CoverageOracle`'s. The service is being migrated onto the contract's format and
-the contract is not being redeployed. This is the only reason three checks in the one command
-fail, and the x402 records will be re-run to encoding `v: 3` once it lands.
+**The attestation stored on chain is not a coverage reading.** `CoverageOracle` accepted one PLIM-B
+attestation at 150.00%, but it was signed over test figures to prove the signature format, not over
+any vault. It expired five minutes later and commits to a vault set that has since been retired,
+so it can never count again.
 
-**The published Substreams package is Ethereum mainnet only.** Base and the per-holder positions
-module that note coverage depends on are v0.2.0, built here and not published. The published
-v0.1.1 also carries v0.2.0's README inside it by mistake, so its registry page describes things
-the package does not contain; a corrected v0.1.2 is being cut, and the manifest is the authority.
+**The Substreams positions cross-checks ran on public holders, not on our own positions.** The
+issuer's address read exactly zero shares in that run, because there was nothing to read.
 
 **The attestor is trusted to tell the truth.** The oracle verifies who signed, and that the
 evidence is fresh and about the right vaults. It cannot verify the vault positions themselves. A
@@ -177,9 +181,10 @@ because ATS refuses to revoke an operator that holds no KYC. It is inert, since 
 only escrow once a retired load line clears PLIM-B, which never happens. Every step is in the
 deployment record, including the revert.
 
-**PLIM-A's registered vault-set hash was never a vault set.** It is `sha256("plimsoll/vaults/v1")`
-from a one-off environment bootstrap. Until `setVaultSet` lands, PLIM-A refuses for an evidence
-reason rather than as a short note.
+**Both notes started life under placeholder vault-set hashes.** PLIM-A's was
+`sha256("plimsoll/vaults/v1")` from a one-off environment bootstrap, and PLIM-B's the readable
+ASCII `PLACEHOLDER-NOT-A-VAULT-SET`. Both were replaced by `setVaultSet`, and both transactions are
+in [PROOF.md](PROOF.md#8-the-backing-is-named-on-chain).
 
 **Coverage assumes USD par and USD-pegged underlyings.** A non-USD note currency, or an underlying
 not priced at peg, refuses rather than being guessed at. USD pricing covers each network's dollar
@@ -205,5 +210,5 @@ mandate on screen.
 the two disagree about key ordering. We pin the exact bytes we hash in a test so anyone can
 compare, but we have not cross-validated against another implementation.
 
-**Testnet only, and not audited.** Nothing here has been exercised on mainnet, and this is three
-days of hackathon work.
+**Testnet only, and not audited.** Nothing on Hedera here has been exercised on mainnet, and this
+is three days of hackathon work.
