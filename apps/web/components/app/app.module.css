@@ -11,9 +11,10 @@
   top: 0;
   z-index: 20;
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: var(--s-4);
+  gap: var(--s-2) var(--s-4);
   padding: var(--s-3) var(--gutter);
   background: var(--ground);
   border-bottom: 1px solid var(--rule);
@@ -40,10 +41,13 @@
   color: var(--text-3);
 }
 
+/* Every item has to be able to drop to the next line: the nav grows as screens are
+   added, and a rail that cannot wrap drags the whole page sideways on a phone. */
 .nav {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s-2);
+  min-width: 0;
 }
 
 .nav a {
@@ -76,6 +80,11 @@
   padding: 0.45em var(--gutter);
   border-bottom: 1px solid var(--rule);
   background: color-mix(in oklab, var(--ground) 94%, var(--lamp));
+  min-width: 0;
+}
+
+.band > * {
+  min-width: 0;
 }
 
 .bandFacts {
@@ -191,9 +200,13 @@
 }
 
 /* ── Panels ─────────────────────────────────────────────────────────────── */
+/* min-width: 0 because a panel is a grid item: without it the column's minimum is the
+   panel's min-content, and one unbreakable line inside — a command, a transaction id —
+   drags the whole page sideways instead of scrolling within its own box. */
 .panel {
   --c: 14px;
   position: relative;
+  min-width: 0;
   padding: var(--s-4);
   background: color-mix(in oklab, var(--ground) 93%, var(--lamp));
   clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));

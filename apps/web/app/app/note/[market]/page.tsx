@@ -1,14 +1,7 @@
 import { notFound } from 'next/navigation';
 import { NoteHero } from '@/components/app/NoteHero';
-import {
-  formatAmount,
-  formatUsd,
-  notesOutstanding,
-  obligationValue,
-  parPerNote,
-  type CoverageState,
-} from '@/lib/coverage-state';
-import { noteBySlug, notes, site } from '@/site.config';
+import { formatAmount, formatUsd, notesOutstanding, obligationValue, parPerNote } from '@/lib/coverage-state';
+import { auditRecords, noteBySlug, notes, site } from '@/site.config';
 import styles from '@/components/app/app.module.css';
 import note from './note.module.css';
 
@@ -22,11 +15,16 @@ export default async function NotePage({ params }: { params: Promise<{ market: s
   if (!record) notFound();
 
   const owed = obligationValue(record.obligation);
-  const recorded: CoverageState = { family: 'evidence', reason: 'no-reading-yet' };
-  const recordedWords = record.vaultSetSettled
-    ? 'The note has no attestation on record yet.'
-    : 'No position reading yet: the vault set is still being settled, so nothing can attest this note.';
+  const readOn = record.oracle.readOn;
+  const setWords = record.vaultSetSettled
+    ? `The vault set is registered, and when the oracle was read on ${readOn} the holder on Base was not funded yet.`
+    : 'The vault set is not final yet.';
+  const recordedWords =
+    record.oracle.reason === 'AttestationExpired'
+      ? `CoverageOracle reads ${record.market} as unproven: its last attestation has expired. ${setWords}`
+      : `CoverageOracle holds no attestation for ${record.market}. ${setWords}`;
 
+  const ownRecords = auditRecords.filter((r) => record.recordSeqs.includes(r.seq));
   const plannedKnown = record.plan.filter((l) => typeof l.planned === 'number');
   const plannedTotal = plannedKnown.reduce((sum, l) => sum + (l.planned as number), 0);
   const widest = Math.max(...plannedKnown.map((l) => l.planned as number), 1);
@@ -58,7 +56,13 @@ export default async function NotePage({ params }: { params: Promise<{ market: s
         </ul>
       </div>
 
-      <NoteHero obligation={record.obligation} recorded={recorded} demonstrated={recordedWords} />
+      <NoteHero
+        obligation={record.obligation}
+        recorded={record.recorded}
+        demonstrated={recordedWords}
+        negativeControl={record.negativeControl}
+        plannedBackingUsd={record.plannedBackingUsd}
+      />
 
       <div className={note.grid}>
         <section className={styles.panel}>
@@ -116,11 +120,36 @@ export default async function NotePage({ params }: { params: Promise<{ market: s
             ))}
           </ul>
           <p className={styles.panelNote}>
-            Nominated on Base, held by <a href={site.holderHref}>the issuer's own address</a>. These are the planned
-            deposits, not a reading: until the set is final and the first reading lands, this note has no coverage
-            figure at all. {plannedKnown.length > 0 && `Named legs come to ${formatUsd(plannedTotal)}.`}
+            On Base, held by <a href={site.holderHref}>the issuer's own address</a>.{' '}
+            {record.vaultSetSettled
+              ? 'The vault set is registered on CoverageOracle, and the two notes’ sets are disjoint: a position backs exactly one note.'
+              : 'The two notes’ sets are disjoint: a position backs exactly one note.'}{' '}
+            The amounts are planned deposits, not a reading, so this note has no coverage figure until the holder is
+            funded and the first reading lands.{' '}
+            {plannedKnown.length > 0 && `Named legs come to ${formatUsd(plannedTotal)}.`}
           </p>
         </section>
+
+        {record.scenario && (
+          <section className={styles.panel}>
+            <h2>What the plan does when it is tested</h2>
+            <ul className={styles.rows}>
+              {record.scenario.map((s) => (
+                <li key={s.label}>
+                  <span className="k">{s.label}</span>
+                  <span className="v">
+                    {s.coverage} · {s.clear ? 'clear' : 'refused'}
+                  </span>
+                  <span className="sub">{s.detail}</span>
+                </li>
+              ))}
+            </ul>
+            <p className={styles.panelNote}>
+              Measured on a fork of Base, not on funded positions. It is the case for a line drawn against value: the
+              market stops when what is behind the note is worth too little, whatever it is spread across.
+            </p>
+          </section>
+        )}
 
         <section className={styles.panel}>
           <h2>The line, and who moved it</h2>
@@ -153,24 +182,32 @@ export default async function NotePage({ params }: { params: Promise<{ market: s
           <h2>Attestation</h2>
           <ul className={styles.rows}>
             <li>
-              <span className="k">Records for this note</span>
-              <span className="v">None</span>
+              <span className="k">CoverageOracle, read {readOn}</span>
+              <span className="v">
+                {record.oracle.verdict} · {record.oracle.reason}
+              </span>
               <span className="sub">{recordedWords}</span>
             </li>
-            <li>
-              <span className="k">Audit topic</span>
-              <span className="v">
-                <a href={site.auditTopic.href}>{site.auditTopic.id}</a>
-              </span>
-              <span className="sub">
-                The topic carries the attestation service's own records, against its test notes rather than this one.
-                Nothing on it is evidence about {record.market}.
-              </span>
-            </li>
+            {ownRecords.map((r) => (
+              <li key={r.seq}>
+                <span className="k">
+                  <a href={site.auditTopic.href}>Record {r.seq}</a>
+                </span>
+                <span className="v">
+                  {r.decision}
+                  {r.bps !== null ? ` · ${(r.bps / 100).toFixed(2)}%` : ''}
+                </span>
+                <span className="sub">
+                  {r.backing} against {r.obligation}, computed from fixture backing ({r.source})
+                  {r.retiredVaultSet ? ' against the vault set that has since been replaced' : ''}. It proves the path on
+                  this note, not this note’s backing.
+                </span>
+              </li>
+            ))}
           </ul>
           <p className={styles.panelNote}>
-            An attestation is refused rather than guessed. Until the vaults can be read, the honest answer is that
-            there is no figure — which is why this screen shows none.
+            A figure from fixture backing is never shown as this note’s coverage, and a lapsed attestation counts for
+            nothing. The first reading of the registered vaults will be a new record on the topic.
           </p>
         </section>
 

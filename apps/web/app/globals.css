@@ -11,12 +11,12 @@
 
   --lamp: var(--ink);
 
-  /* How much ground goes into each tone under the current lamp. Contrast of
-     the text steps against the ground is noted beside them. */
+  /* How much ground goes into each tone under the current lamp. Contrast of the
+     text steps is measured on a panel, the darkest-but-one surface text sits on. */
   --k-arris: 8%;
-  --k-text-2: 22%; /* 5.2 : 1 */
+  --k-text-2: 12%; /* 6.0 : 1 */
   --k-lit: 22%;
-  --k-text-3: 34%; /* 3.9 : 1, large text and marks only */
+  --k-text-3: 22%; /* 4.8 : 1 */
   --k-half: 52%;
   --k-cut: 64%;
   --k-dark: 80%;
@@ -70,9 +70,12 @@
   --face-cut: color-mix(in oklab, var(--ground) var(--k-cut), var(--lamp));
   --face-dark: color-mix(in oklab, var(--ground) var(--k-dark), var(--lamp));
   --rule: color-mix(in oklab, var(--ground) var(--k-rule), var(--lamp));
-  --text: var(--lamp);
-  --text-2: color-mix(in oklab, var(--ground) var(--k-text-2), var(--lamp));
-  --text-3: color-mix(in oklab, var(--ground) var(--k-text-3), var(--lamp));
+  /* Text is usually lit by the lamp itself. A lamp too dark to read by — murk —
+     supplies its own source instead, declared on the same element. */
+  --text-source: var(--lamp);
+  --text: var(--text-source);
+  --text-2: color-mix(in oklab, var(--ground) var(--k-text-2), var(--text-source));
+  --text-3: color-mix(in oklab, var(--ground) var(--k-text-3), var(--text-source));
 }
 
 /* The arc lamps. Arc white is far brighter than brass, so every tone takes
@@ -80,9 +83,9 @@
 [data-lamp='arc'] {
   --lamp: var(--alarm);
   --k-arris: 20%;
-  --k-text-2: 40%; /* 5.8 : 1 */
+  --k-text-2: 30%; /* 7.0 : 1 */
   --k-lit: 40%;
-  --k-text-3: 52%; /* 4.0 : 1 */
+  --k-text-3: 42%; /* 4.9 : 1 */
   --k-half: 66%;
   --k-cut: 74%;
   --k-dark: 87%;
@@ -98,21 +101,25 @@
 [data-family='asset'] {
   --lamp: var(--alarm);
   --k-arris: 20%;
-  --k-text-2: 40%;
+  --k-text-2: 30%;
   --k-lit: 40%;
-  --k-text-3: 52%;
+  --k-text-3: 42%;
   --k-half: 66%;
   --k-cut: 74%;
   --k-dark: 87%;
   --k-rule: 88%;
 }
 
+/* Murk lights the plane, the faces and the tags, but it is too dark to read text
+   by: every step derived from it failed on a panel. Its text is a fog light — murk
+   lifted toward arc white — at 10.8, 6.4 and 4.7 : 1. */
 [data-family='evidence'] {
   --lamp: var(--murk);
+  --text-source: color-mix(in oklab, var(--murk) 40%, var(--alarm));
   --k-arris: 16%;
-  --k-text-2: 34%;
+  --k-text-2: 22%;
   --k-lit: 36%;
-  --k-text-3: 48%;
+  --k-text-3: 34%;
   --k-half: 62%;
   --k-cut: 72%;
   --k-dark: 86%;

@@ -17,7 +17,13 @@
  */
 
 export type AssetFamily = 'covered' | 'short' | 'no-positions';
-export type EvidenceReason = 'no-reading-yet' | 'data-stale' | 'vault-unresolved' | 'sources-disagree';
+export type EvidenceReason =
+  | 'no-reading-yet'
+  | 'no-attestation'
+  | 'attestation-expired'
+  | 'data-stale'
+  | 'vault-unresolved'
+  | 'sources-disagree';
 
 /** What the note owes, read from its own chain: supply × nominal value. Never configured. */
 export interface Obligation {
@@ -92,6 +98,8 @@ export function describeState(state: CoverageState): { word: string; detail: str
 
 export const EVIDENCE_DETAIL: Record<EvidenceReason, string> = {
   'no-reading-yet': 'No position reading yet. The vault set changed, and the first live reading has not landed.',
+  'no-attestation': 'The oracle holds no attestation for this note, so there is nothing to read a figure from.',
+  'attestation-expired': 'The last attestation has expired. An expired attestation is not evidence, so there is no figure.',
   'data-stale': 'The last reading is older than the freshness bound, so it is no longer evidence.',
   'vault-unresolved': 'A vault in the set returned no usable reading.',
   'sources-disagree': 'Two independent endpoints disagreed about the same position.',
@@ -107,6 +115,10 @@ export function reasonCode(state: CoverageState): string | null {
     case 'no-positions':
       return 'no_attributable_positions';
     case 'evidence':
+      // The two oracle reasons are shown under the oracle's own names, because that is
+      // what a reader will find on chain; the rest are the attestation service's codes.
+      if (state.reason === 'no-attestation') return 'NoAttestation';
+      if (state.reason === 'attestation-expired') return 'AttestationExpired';
       return state.reason === 'no-reading-yet' ? 'source_unavailable' : state.reason.replace(/-/g, '_');
   }
 }

@@ -53,11 +53,23 @@ export function useDemo(): Ctx {
  * The state a screen should draw: the note's recorded state, or the demonstration the
  * visitor selected. `backingUsd` for a demonstration is derived from the note's own
  * obligation so the amounts stay consistent with the note being shown.
+ *
+ * A negative control is exempt. It exists to fail, so it never borrows a demonstration
+ * that would show it clearing: it shows its own backing against what it owes, which is
+ * where a 0.00% that is not an empty wallet comes from.
  */
-export function stateForDemo(demo: DemoKey, recorded: CoverageState, obligationUsd: number): CoverageState {
+export function stateForDemo(
+  demo: DemoKey,
+  recorded: CoverageState,
+  obligationUsd: number,
+  control?: { negativeControl: boolean; plannedBackingUsd?: number },
+): CoverageState {
+  if (demo === 'recorded') return recorded;
+  if (control?.negativeControl) {
+    const backing = control.plannedBackingUsd ?? 0;
+    return backing > 0 ? { family: 'short', backingUsd: backing } : { family: 'no-positions', backingUsd: 0 };
+  }
   switch (demo) {
-    case 'recorded':
-      return recorded;
     case 'covered':
       return { family: 'covered', backingUsd: obligationUsd * 1.5 };
     case 'short':

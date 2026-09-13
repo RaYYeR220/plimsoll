@@ -16,16 +16,25 @@ export function NoteHero({
   obligation,
   recorded,
   demonstrated,
+  negativeControl = false,
+  plannedBackingUsd,
 }: {
   obligation: Obligation;
   recorded: CoverageState;
   /** What the recorded state is, in words, for the line under the readout. */
   demonstrated: string;
+  negativeControl?: boolean;
+  plannedBackingUsd?: number;
 }) {
   const { demo } = useDemo();
-  const state = stateForDemo(demo, recorded, obligationValue(obligation));
+  const state = stateForDemo(demo, recorded, obligationValue(obligation), { negativeControl, plannedBackingUsd });
   const family = state.family === 'evidence' ? 'evidence' : state.family === 'covered' ? 'covered' : 'asset';
-  const showing = demo === 'recorded' ? demonstrated : 'A demonstration state, not a reading of this note.';
+  const showing =
+    demo === 'recorded'
+      ? demonstrated
+      : negativeControl
+        ? 'The negative control does not follow the demonstration. This is its planned backing against what it owes: it cannot clear, and that is the point of keeping it on the floor.'
+        : 'A demonstration state, not a reading of this note.';
 
   return (
     <section className={`${styles.panel} ${hero.hero}`} data-family={family} aria-label="Coverage">

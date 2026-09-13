@@ -1,0 +1,250 @@
+/* Shared layout for the refusal, issuer and audit screens. The panels, rows and
+   readouts themselves come from the app stylesheet; this file only arranges them. */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: var(--s-4);
+  align-items: start;
+}
+
+.grid > *,
+.split > * {
+  min-width: 0;
+}
+
+.gridTight {
+  margin-top: var(--s-4);
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+/* two columns where one side is a transcript and the other a fixed artifact */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-4);
+  align-items: start;
+}
+
+@media (min-width: 1000px) {
+  .split {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  }
+}
+
+/* the mandate, set as the device set it */
+.mandate {
+  margin: 0;
+  padding: var(--s-3);
+  border: 1px solid var(--rule);
+  font-family: var(--font-data), ui-monospace, monospace;
+  font-size: var(--t-data);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+/* the four screens a person actually pages through */
+.screens {
+  display: grid;
+  gap: var(--s-2);
+  margin: var(--s-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.screens li {
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--rule);
+  font-family: var(--font-data), ui-monospace, monospace;
+  font-size: var(--t-data);
+  color: var(--text-2);
+}
+
+.screens li:first-child,
+.screens li:last-child {
+  color: var(--text);
+  border-color: color-mix(in oklab, var(--ground) 40%, var(--lamp));
+}
+
+/* the transcript: every step, in the order it happened */
+.steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.3em var(--s-3);
+  padding-block: var(--s-3);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--font-data), ui-monospace, monospace;
+  font-size: var(--t-data);
+}
+
+.step:last-child {
+  border-bottom: 0;
+}
+
+.stepLabel {
+  color: var(--text);
+}
+
+.stepMeta {
+  grid-column: 1 / -1;
+  color: var(--text-3);
+}
+
+.stepResult {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.step[data-outcome='refused'] .stepResult,
+.step[data-outcome='reverted'] .stepResult {
+  color: var(--alarm);
+}
+
+.step[data-outcome='approved'] .stepResult,
+.step[data-outcome='success'] .stepResult {
+  color: var(--text);
+}
+
+.step a {
+  color: inherit;
+}
+
+/* the register of records on the topic */
+.register {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-data), ui-monospace, monospace;
+  font-size: var(--t-data);
+}
+
+.register th {
+  padding: 0 var(--s-3) 0.5em 0;
+  text-align: left;
+  font-weight: 400;
+  font-size: 0.85em;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  border-bottom: 1px solid var(--rule);
+}
+
+.register td {
+  padding: 0.65em var(--s-3) 0.65em 0;
+  vertical-align: top;
+  border-bottom: 1px solid var(--rule);
+  color: var(--text-2);
+}
+
+.register tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Named in the markup rather than imported, and scoped under the hashed .register. */
+.register :global(.seq) {
+  font-size: 1.15em;
+  color: var(--text);
+}
+
+.register :global(.figure) {
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* A transaction id is one token: break it only where it has to break, and never
+   leave two characters stranded on a line of their own. */
+.register a {
+  color: var(--text);
+  overflow-wrap: anywhere;
+  word-break: normal;
+  hyphens: none;
+}
+
+.scroll {
+  overflow-x: auto;
+}
+
+/* On a phone a six-column register cannot be a table without dragging the page
+   sideways, so each record becomes a block and the column headings become labels. */
+@media (max-width: 760px) {
+  .register,
+  .register tbody,
+  .register tr,
+  .register td {
+    display: block;
+    width: 100%;
+  }
+
+  .register thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .register tr {
+    padding-block: var(--s-3);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .register tr:last-child {
+    border-bottom: 0;
+  }
+
+  .register td {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    gap: var(--s-3);
+    padding: 0.25em 0 0;
+    border-bottom: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .register td::before {
+    content: attr(data-label);
+    color: var(--text-3);
+    font-size: 0.85em;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+}
+
+/* a family tag, in the family's own lamp */
+.tag {
+  display: inline-block;
+  padding: 0.15em 0.6em;
+  background: var(--lamp);
+  color: var(--ground);
+  font-family: var(--font-data), ui-monospace, monospace;
+  font-size: var(--t-data);
+  white-space: nowrap;
+}
+
+.tagQuiet {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--rule);
+}
+
+/* a command a stranger can run */
+.command {
+  margin: var(--s-3) 0 0;
+  padding: var(--s-3);
+  border: 1px solid var(--rule);
+  font-family: var(--font-data), ui-monospace, monospace;
+  font-size: var(--t-data);
+  color: var(--text);
+  overflow-x: auto;
+  white-space: pre;
+}

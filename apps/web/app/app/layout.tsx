@@ -12,6 +12,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const links: ShellLink[] = [
     { href: '/app', label: 'Market' },
     ...notes.map((n) => ({ href: `/app/note/${n.market.toLowerCase()}`, label: n.market })),
+    { href: '/app/refusal', label: 'Refusal' },
+    { href: '/app/issuer', label: 'Issuer' },
+    { href: '/app/audit', label: 'Audit' },
   ];
 
   return (

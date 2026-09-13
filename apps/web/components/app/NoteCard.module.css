@@ -87,8 +87,9 @@
 }
 
 /* Brass whatever the note's state is: going to a screen is not a refusal, and the
-   alarm colours are spent on findings only. */
-.open {
+   alarm colours are spent on findings only. Scoped under .foot so it outranks the
+   footer's link colour, which otherwise paints pale text onto the brass. */
+.foot .open {
   --c: 6px;
   padding: 0.45em 0.9em;
   background: var(--ink);
@@ -97,6 +98,6 @@
   clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
 }
 
-.open:hover {
+.foot .open:hover {
   background: color-mix(in oklab, var(--ground) 8%, var(--ink));
 }

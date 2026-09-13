@@ -14,10 +14,10 @@ export default function MarketPage() {
     slug: n.market.toLowerCase(),
     obligation: n.obligation,
     negativeControl: n.negativeControl,
+    plannedBackingUsd: n.plannedBackingUsd,
     hederaId: n.hederaId,
     href: n.href,
-    // Neither note has a position reading yet: the vault set is still being settled.
-    recorded: { family: 'evidence', reason: 'no-reading-yet' },
+    recorded: n.recorded,
   }));
 
   const plimB = notes[0];
