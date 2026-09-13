@@ -61,6 +61,8 @@ export interface AnchorRecord {
   /** Request id, the join key between this record, the receipt and the charge. */
   rid: string;
   n: string;
+  /** keccak256 of the market code: the id the oracle knows the note by. */
+  nid?: string;
   d: "attested" | "refused";
   fam?: "asset" | "evidence";
   rsn?: string;
@@ -84,6 +86,21 @@ export interface AnchorRecord {
   sig: string;
   /** Whether HBAR moved. The claim the verifier checks against the mirror node. */
   chg: boolean;
+  /** Seller account, so an absence can be checked without our receipts. */
+  pay?: string;
+  /** Oracle the signature is bound to, so the domain can be rebuilt from the record. */
+  orc?: string;
+  /** Chain id of that oracle. The other half of the domain. */
+  cid?: number;
+  /**
+   * Source of the readings.
+   *
+   * `fixture` means the figures came from checked-in JSON, not from a chain. It
+   * is written into the record rather than only into a document because a
+   * sequence number outlives every document: without it, a reader finding this
+   * message on the topic has no way to tell a demonstration from a measurement.
+   */
+  feed?: string;
   tx?: string;
   pos?: AnchoredPosition[];
   /** 1 when positions are inline, 0 when they were dropped to fit. */
@@ -96,6 +113,18 @@ export interface AnchorInput {
   /** Settlement, when one happened. Absence is itself the claim. */
   charge: { transactionId: string } | null;
   maxPositions?: number;
+  /**
+   * Account a charge would have credited, recorded whether or not one happened.
+   * Required, because it is what lets a reader check an absence: without it the
+   * claim "nothing moved" names no account to check and is unfalsifiable.
+   */
+  payTo: string;
+  /**
+   * The oracle this verdict was signed for. Required for the same reason: a v3
+   * signature is bound to one oracle on one chain, and a record that does not
+   * name them cannot have its own signature checked.
+   */
+  oracle: { address: string; chainId: number };
 }
 
 /**
@@ -137,6 +166,12 @@ export function buildAnchorRecord(input: AnchorInput): AnchorRecord {
     base.known = verdict.coverageKnown;
   }
   if (charge) base.tx = charge.transactionId;
+  base.nid = verdict.noteIdHash;
+  base.feed = verdict.feed;
+  // Recorded on refusals too: it is what lets a stranger check that nothing moved.
+  base.pay = input.payTo;
+  base.orc = input.oracle.address;
+  base.cid = input.oracle.chainId;
 
   // The ratio and the line it is measured against travel together: a floor with
   // no ratio invites the reader to supply the missing half.

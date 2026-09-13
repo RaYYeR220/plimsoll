@@ -106,7 +106,11 @@ as a v1 fallback. Settlement comes back on **`PAYMENT-RESPONSE`**.
 | `FACILITATOR_URL` | no | Defaults to the hosted testnet facilitator. |
 | `AMOUNT_TINYBAR` | no | Price in tinybar. Default `100000`. |
 | `PORT` / `PUBLIC_BASE_URL` | no | Listen port and the URL the service calls itself. |
-| `COVERAGE_SOURCE` | no | `fixture` (default) or `live`. See MOCKS.md. |
+| `COVERAGE_SOURCE` | no | `fixture` (default, synthetic `NOTE-*` notes only) or `live`. See MOCKS.md. |
+| `LIVE_NOTES_FILE` | for `live` | The shared notes file, `packages/substreams/notes.json`. |
+| `BASE_RPC_URL` / `BASE_WITNESS_RPC_URLS` | for `live` | Primary Base endpoint and independent witnesses. Set the primary: the default `mainnet.base.org` throttles into `source_unavailable`. |
+| `COVERAGE_ORACLE_ADDRESS` | no | Oracle the signature is bound to. Read from `packages/contracts/deployments/hedera-testnet.json` at run time; set this only to override it. |
+| `ORACLE_CHAIN_ID` | no | The other half of the domain, likewise read from the deployment record. |
 | `HEDERA_ACCOUNT_ID` | for anchoring | Operator that submits HCS receipts. |
 | `HEDERA_PRIVATE_KEY` | for anchoring | **ECDSA secp256k1 only.** ED25519 fails silently in EVM-adjacent tooling. |
 | `HCS_TOPIC_ID` | for anchoring | Topic with a submit key and no admin key. |
@@ -184,7 +188,8 @@ A note with more legs than fit degrades to a digest-only record that says so
 ### No figure where none was established
 
 Keys are omitted, never zeroed. An evidence refusal carries only who, what and
-why — `p v rid n d pol att sig chg fam rsn known` — and nothing numeric: no
+why — `p v rid n nid d pol att sig chg pay orc cid feed fam rsn known` — and
+nothing numeric: no
 `bps`, `floor`, `blk`, `obs`, `val`, `obl`, `ud`, `out`, `par`, `ss`, `vsh`,
 `srch` or `pos`. A `"bps": 0` would read as zero percent coverage and be
 indistinguishable from a genuine `no_attributable_positions` finding; absence
@@ -210,8 +215,23 @@ encoding disagree fails.
   struct. Sequences 12–16 were written after the omission encoding and the split
   signature types landed but before the version changed, so they are v2 content
   under a v1 label.
-- **v2, from sequence 17.** Figures are omitted, never zeroed, and refusals are
+- **v2, sequences 17–21.** Figures are omitted, never zeroed, and refusals are
   signed as `AssetRefusal` or `EvidenceRefusal`.
+- **v3, from sequence 22.** The signed attestation is the struct `CoverageOracle`
+  recovers, under a domain bound to that oracle, so an attestation this service
+  sells is one the chain can accept. The record also gained the fields that make
+  it checkable on its own: `nid` (the note id the oracle knows), `orc` and `cid`
+  (the oracle and chain the signature is bound to), `pay` (the account a charge
+  would have credited) and `feed` (which source produced the readings).
+
+v1 and v2 signatures could never have been accepted on chain: they signed a
+`string` note id, a `uint32` coverage and a random `bytes32` nonce under a domain
+naming no contract, and the two implementations of that digest were written by
+hand and never compared. `test/typed-data.test.ts` is the check that should have
+existed from the start — it asserts the type string is still verbatim in
+`CoverageOracle.sol`, recomputes the typehash with `cast` rather than the library
+that signs, and asks the deployed contract's own `hashAttestation` whether our
+digest matches across the full range of every field.
 
 The topic is immutable, so the v1 records stay where they are and remain
 checkable under v1 rules. Checked from the public record alone, every v1 record
@@ -221,26 +241,48 @@ written to, with the zero reported as not a coverage reading. MOCKS.md has the
 per-record results, including the mislabels that only our stored receipts
 expose.
 
-Canonical records, format v2:
+### Canonical records
 
-| case | HCS seq | bytes | settlement |
-| --- | --- | --- | --- |
-| attested, NOTE-ALPHA, 13000 bps | 17 | 843 | `0.0.7162784@1789121899.540907773` |
-| asset refusal, NOTE-BRAVO, 8700 bps | 18 | 832 | none |
-| evidence refusal, NOTE-INDIA, `source_unavailable` | 19 | 365 | none |
+The records worth citing are live readings, anchored as format v3 with
+`"feed": "live"`: a paid attestation for PLIM-B, and a free refusal for PLIM-A,
+whose $1.00 of real backing against a $1,000,000.00 obligation floors to 0 bps
+against its own 9500 bps line. That zero is a finding about the asset, refused as
+`coverage_below_floor`; an unreachable source would have refused as an evidence
+failure with no figure at all. A real zero and an absence are different answers.
+
+Sequences 22–24 are v3 records produced from fixtures, and two of them carry real
+market codes with invented figures. They are not cited; MOCKS.md says why.
+
+### On `CoverageOracle`
+
+An attestation is submitted exactly as it was sold. `submit-oracle --receipt` takes
+the stored receipt of a paid call, checks that its feed is live and that its
+signature recovers under the oracle's domain, and sends those bytes — then sends
+them again, which the oracle must reject as stale, because an oracle that accepted
+anything carrying a valid signature would be checking the signature and nothing
+else. It refuses a simulated feed, never submits a refusal, and sends nothing
+without `--submit`.
+
+```
+npm run submit-oracle -- --receipt data/receipts/<requestId>.json            # dry run
+npm run submit-oracle -- --receipt data/receipts/<requestId>.json --submit
+```
 
 ## Honest limits
 
-- **The coverage source is fixtures.** The Substreams pipeline over real ERC-4626 vault
-  flows is not wired yet. `LiveCoverageSource` throws `SourceUnavailable` on every call
-  rather than approximating. Everything else — the decision logic, signing, payment flow,
-  anchoring, verification — is real. See MOCKS.md.
-- **The vault addresses in the fixtures are not deployed contracts.** They are
-  syntactically valid addresses over invented balances. `verify-charge` recomputes the
-  ratio from the anchored readings, which proves the arithmetic and the payment
-  biconditional; it cannot yet re-read the vaults themselves, because they do not exist.
-- **The floor is 1.00x with no buffer.** A buffer is an issuer's risk parameter, not an
-  attestor's.
+- **Two sources, and every record names which.** `LiveCoverageSource` reads real
+  positions on Base and the note's figures on Hedera; the fixture source serves the
+  synthetic `NOTE-*` notes for tests and the offline demo. Each anchored record says
+  which produced it in `feed`. Nothing built from a fixture is submitted on chain — see
+  MOCKS.md for the one time it was, and what changed.
+- **The fixture vault addresses are not deployed contracts.** They are syntactically
+  valid addresses over invented balances, used only by synthetic notes.
+- **The load line is the note's, not ours.** It is read from `LoadLine.lineOf` with the
+  note's other figures, so PLIM-A is measured against 9500 bps and PLIM-B against
+  10000. The service has no floor setting to get wrong.
+- **`verify-charge` does not re-read the vaults.** It recomputes the ratio from the
+  anchored readings and checks the payment biconditional; re-reading Base at the
+  anchored block is left to the reader.
 - **Single-writer nonce and receipt stores.** Files on disk, adequate for one process.
   Horizontal scaling needs shared storage.
 - **The HCS-14 UAID follows the reference implementation, not the spec prose.** The
@@ -274,6 +316,7 @@ src/
   coverage/          THE SEAM: CoverageSource, fixtures, and the live stub
 bin/
   verify-charge.ts   the judge-runnable proof
+  submit-oracle.ts   puts a live, paid-for attestation on CoverageOracle; refuses anything simulated
   register-agent.ts  one-time ERC-8004 registration
 demo/offline.ts      the whole product with no credentials
 test/                node:test

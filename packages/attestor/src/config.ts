@@ -1,4 +1,6 @@
 import type { Hex } from "viem";
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import type { CoverageSourceKind } from "./coverage/index.js";
 
 /** Missing configuration is always fatal here; nothing has a silent default. */
@@ -17,6 +19,8 @@ export interface SellerConfig {
   port: number;
   publicBaseUrl: string;
   attestorPrivateKey: Hex;
+  /** The oracle an attestation is signed for, and the chain it lives on. */
+  oracle: { address: string; chainId: number };
   coverageSource: CoverageSourceKind;
   substreamsEndpoint: string | undefined;
   anchor: AnchorConfig | null;
@@ -61,6 +65,37 @@ function ecdsaKey(name: string, value: string | undefined): Hex {
   return hex as Hex;
 }
 
+/**
+ * The oracle an attestation is signed for, read from the deployment record.
+ *
+ * A literal address in this file would go stale the moment the stack is
+ * redeployed, and stale silently: signatures would keep being produced for an
+ * oracle nobody is using. That is the same failure as a typehash nobody
+ * cross-checks, so the address is read from the record every run. The
+ * environment overrides it for a private deployment.
+ */
+export const DEPLOYMENT_RECORD = fileURLToPath(
+  new URL("../../../contracts/deployments/hedera-testnet.json", import.meta.url),
+);
+
+export function resolveOracle(env: NodeJS.ProcessEnv = process.env): { address: string; chainId: number } {
+  const path = (env.DEPLOYMENT_RECORD ?? DEPLOYMENT_RECORD).trim();
+  let fromRecord: { address?: string; chainId?: number } = {};
+  if (existsSync(path)) {
+    const record = JSON.parse(readFileSync(path, "utf8"));
+    fromRecord = { address: record?.contracts?.CoverageOracle?.address, chainId: record?.network?.chainId };
+  }
+  const address = (env.COVERAGE_ORACLE_ADDRESS ?? fromRecord.address ?? "").trim();
+  const chainId = Number(env.ORACLE_CHAIN_ID ?? fromRecord.chainId ?? Number.NaN);
+  if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
+    throw new ConfigError("COVERAGE_ORACLE_ADDRESS", `no CoverageOracle address in ${path} and none in the environment`);
+  }
+  if (!Number.isInteger(chainId)) {
+    throw new ConfigError("ORACLE_CHAIN_ID", "no chain id in the deployment record or the environment");
+  }
+  return { address, chainId };
+}
+
 export function loadSellerConfig(env: NodeJS.ProcessEnv = process.env): SellerConfig {
   const anchorVars = [env.HEDERA_ACCOUNT_ID, env.HEDERA_PRIVATE_KEY, env.HCS_TOPIC_ID];
   const anchorRequested = anchorVars.some((v) => (v ?? "").trim().length > 0);
@@ -73,6 +108,7 @@ export function loadSellerConfig(env: NodeJS.ProcessEnv = process.env): SellerCo
     port: Number(env.PORT ?? 4021),
     publicBaseUrl: (env.PUBLIC_BASE_URL ?? `http://localhost:${env.PORT ?? 4021}`).replace(/\/$/, ""),
     attestorPrivateKey: ecdsaKey("ATTESTOR_PRIVATE_KEY", env.ATTESTOR_PRIVATE_KEY),
+    oracle: resolveOracle(env),
     coverageSource: (env.COVERAGE_SOURCE ?? "fixture") as CoverageSourceKind,
     substreamsEndpoint: env.SUBSTREAMS_ENDPOINT?.trim() || undefined,
     // Anchoring is optional, but half-configured anchoring is not: partial

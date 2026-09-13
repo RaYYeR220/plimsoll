@@ -22,6 +22,7 @@
     "buyer": "npm run build && node --env-file-if-exists=.env dist/src/buyer.js",
     "demo": "npm run build && node dist/demo/offline.js",
     "verify-charge": "npm run build && node dist/bin/verify-charge.js",
+    "submit-oracle": "npm run build && node --env-file-if-exists=.env dist/bin/submit-oracle.js",
     "test": "npm run build && node --env-file-if-exists=.env --test \"dist/test/*.test.js\"",
     "test:offline": "npm run build && node --test \"dist/test/!(live).test.js\"",
     "register": "npm run build && node --env-file-if-exists=.env dist/bin/register-agent.js"

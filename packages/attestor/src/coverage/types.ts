@@ -8,14 +8,16 @@ import type { EvidenceRefusalReason } from "../reasons.js";
  *
  * Behind this interface today there is exactly one usable implementation,
  * `FixtureCoverageSource`, which reads checked-in JSON. The production
- * implementation is a Substreams pipeline over ERC-4626 vault flows that is
- * being built separately; `LiveCoverageSource` is its typed placeholder and
- * throws `SourceUnavailable` on every call.
+ * implementation reads real ERC-4626 positions on Base and is being built
+ * separately; `LiveCoverageSource` is its typed placeholder and throws
+ * `SourceUnavailable` on every call.
  *
  * The rule that makes the seam safe: a source may return a reading or it may
  * fail, and it may never do anything in between. There is no default, no
  * last-known-good, no zero-fill. If the data is not there the service refuses
- * and says so. See MOCKS.md.
+ * and says so. A real zero is different from an absence: a source that reads
+ * the chain and finds nothing backing the note returns an empty position set,
+ * which is a finding about the asset, not a failure of ours. See MOCKS.md.
  * ==============================================================
  */
 
@@ -41,9 +43,9 @@ export interface VaultPosition {
 
 /** Where a snapshot came from, precisely enough to be re-fetched by a stranger. */
 export interface SourceSetDescriptor {
-  /** Stable id of the implementation, e.g. `fixture` or `substreams`. */
+  /** Stable id of the implementation, e.g. `fixture` or `base`. */
   readonly kind: string;
-  /** Dataset/package identity, e.g. a Substreams package hash or fixture set version. */
+  /** Dataset identity, e.g. an indexer package hash or fixture set version. */
   readonly dataset: string;
   /** Independent endpoints that agreed on this snapshot. */
   readonly endpoints: readonly string[];
@@ -51,7 +53,29 @@ export interface SourceSetDescriptor {
 
 /** One coherent observation of a note's backing. */
 export interface CoverageSnapshot {
+  /** The market code a human reads, e.g. `PLIM-B`. */
   readonly noteId: string;
+  /**
+   * The vault-set hash the note is registered with on the oracle.
+   *
+   * The attestation commits to this value, because that is what
+   * `CoverageOracle` compares against; an attestation carrying anything else
+   * is rejected outright. It is the registry's identifier for the backing set,
+   * not something this service is free to compute. `observedVaultSetHash` on
+   * the evidence records what the vault set we actually read hashes to, so the
+   * two can be compared by anyone.
+   */
+  readonly registeredVaultSetHash: string;
+  /**
+   * The load line for this note in basis points, read from `LoadLine.lineOf`.
+   *
+   * This is not a policy setting and must never come from one. The threshold is
+   * the single number that decides whether value moves, so it is read from the
+   * chain, per note, at the time of the reading — a threshold living in our own
+   * configuration would be exactly the unverifiable number this project exists
+   * to refuse. A source that cannot read it fails; there is no default.
+   */
+  readonly thresholdBps: number;
   /** The address the issuer nominated as holding the backing. */
   readonly holder: string;
   /** The vault set the issuer nominated, lowercase and sorted. */
@@ -62,6 +86,7 @@ export interface CoverageSnapshot {
   readonly parPerNote: bigint;
   /** Decimals every amount is normalised to before the ratio is taken. */
   readonly unitDecimals: number;
+  /** Block on the source chain the readings were taken at. */
   readonly asOfBlock: bigint;
   /** Unix seconds at which the underlying chain state was observed. */
   readonly observedAt: number;
@@ -71,7 +96,7 @@ export interface CoverageSnapshot {
 export interface CoverageSource {
   readonly id: string;
   /**
-   * @param noteId - Note to value.
+   * @param noteId - Market code of the note to value.
    * @param atBlock - Pin the reading to a block; omitted means latest.
    * @throws {CoverageSourceError} when a ratio cannot be honestly produced.
    */

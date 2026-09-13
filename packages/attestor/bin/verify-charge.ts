@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { AnchorRecord } from "../src/anchor.js";
-import { CURRENT_FORMAT, type FormatVersion } from "../src/format.js";
+import { CURRENT_FORMAT, KNOWN_FORMATS, type FormatVersion } from "../src/format.js";
 import {
   MirrorClient,
   hashscanTopic,
@@ -18,7 +18,9 @@ import {
   check,
   checkAnchorBinding,
   checkEncoding,
+  checkProvenance,
   checkReceipt,
+  oracleFromRecord,
   recomputeCoverageBps,
 } from "../src/verify.js";
 
@@ -112,11 +114,23 @@ export interface VerificationResult {
   settlementTxId: string | null;
   /** Format version the record declares, which selected the rules applied. */
   format: unknown;
+  /** Source of the readings. `fixture` means simulated, not measured. */
+  feed: string | null;
   checks: Check[];
   links: Record<string, string>;
 }
 
-async function loadRecord(args: Args, mirror: MirrorClient): Promise<AnchorRecord | null> {
+interface AnchoredMessage {
+  record: AnchorRecord;
+  /**
+   * Consensus seconds. An absence has to be looked for somewhere, and this is
+   * the only timestamp a stranger has: the record itself carries no clock, and
+   * trusting one it supplied would let the service choose its own alibi window.
+   */
+  consensusSeconds: number;
+}
+
+async function loadRecord(args: Args, mirror: MirrorClient): Promise<AnchoredMessage | null> {
   if (!args.hcs) return null;
   const message = await mirror.topicMessage(args.hcs.topicId, args.hcs.sequenceNumber);
   if (!message) throw new Error(`no message ${args.hcs.sequenceNumber} on topic ${args.hcs.topicId}`);
@@ -129,7 +143,10 @@ async function loadRecord(args: Args, mirror: MirrorClient): Promise<AnchorRecor
         `Plimsoll receipts are always a single message`,
     );
   }
-  return JSON.parse(Buffer.from(message.message, "base64").toString("utf8")) as AnchorRecord;
+  return {
+    record: JSON.parse(Buffer.from(message.message, "base64").toString("utf8")) as AnchorRecord,
+    consensusSeconds: Math.floor(Number(message.consensus_timestamp)),
+  };
 }
 
 async function loadReceipt(args: Args, requestId: string): Promise<StoredReceipt | null> {
@@ -146,7 +163,8 @@ async function loadReceipt(args: Args, requestId: string): Promise<StoredReceipt
 
 export async function verifyCharge(args: Args): Promise<VerificationResult> {
   const mirror = new MirrorClient(args.mirrorUrl ? { baseUrl: args.mirrorUrl } : {});
-  const record = await loadRecord(args, mirror);
+  const anchored = await loadRecord(args, mirror);
+  const record = anchored?.record ?? null;
   const requestId = args.requestId ?? record?.rid ?? "";
   if (!requestId) throw new Error("could not determine a request id from the given evidence");
 
@@ -179,12 +197,24 @@ export async function verifyCharge(args: Args): Promise<VerificationResult> {
   // copy is preferred because the service cannot rewrite it.
   const encodingSubject = record ?? receipt?.anchorRecord ?? null;
   const declaredFormat = (encodingSubject as { v?: unknown } | null)?.v ?? CURRENT_FORMAT;
-  const format: FormatVersion = declaredFormat === 1 ? 1 : 2;
+  // An unrecognised version still has to be checked under some rules, and the
+  // current ones are the honest choice. The label itself is judged separately by
+  // checkEncoding, so an unknown version cannot pass by picking its own standard.
+  const format: FormatVersion = (KNOWN_FORMATS as readonly unknown[]).includes(declaredFormat)
+    ? (declaredFormat as FormatVersion)
+    : CURRENT_FORMAT;
+  // A v3 signature is bound to one oracle on one chain. The record publishes
+  // both, so the domain is rebuilt from the artifact being audited rather than
+  // from anything this tool believes about where the oracle lives.
+  const oracle = oracleFromRecord(encodingSubject);
 
-  if (receipt) checks.push(...(await checkReceipt(receipt, format)));
+  if (receipt) checks.push(...(await checkReceipt(receipt, format, oracle)));
   // Run before anything reads a figure off the record, so an encoding fault is
   // reported as what it is rather than as an arithmetic mismatch.
-  if (encodingSubject) checks.push(checkEncoding(encodingSubject));
+  if (encodingSubject) {
+    checks.push(checkEncoding(encodingSubject));
+    checks.push(checkProvenance(encodingSubject));
+  }
   if (record && receipt) checks.push(...checkAnchorBinding(record, receipt));
   if (record && !receipt) {
     checks.push(
@@ -334,9 +364,35 @@ export async function verifyCharge(args: Args): Promise<VerificationResult> {
             `${fromThisPayer.length} credit(s) to ${receipt.payTo} in [${from}, ${to}] could not be ` +
             `attributed without the anchoring topic; pass --hcs <topic>:<seq> to corroborate against it`));
       }
+    } else if (record?.pay && anchored) {
+      // The stranger's path: the public record and nothing else.
+      //
+      // This branch used to pass on the record's own silence — "it names no
+      // transaction, which is the claim itself" — which restates the thing being
+      // audited instead of checking it. A v3 record names the account a charge
+      // would have credited, so the claim is falsifiable without our files: look
+      // at what that account received around the time this was anchored, and see
+      // whether every credit is claimed by some anchored attestation.
+      const from = anchored.consensusSeconds - 300;
+      const to = anchored.consensusSeconds + 60;
+      const credits = await mirror.transfersTo(record.pay, from, to);
+      const accountedFor = await claimedSettlements(mirror, args.hcs!.topicId);
+      const unexplained = credits.filter((tx) => !accountedFor.has(tx.transaction_id));
+
+      checks.push(check("no-settlement", "no unaccounted settlement exists around this record",
+        unexplained.length === 0,
+        unexplained.length === 0
+          ? `${credits.length} credit(s) to ${record.pay} in [${from}, ${to}], all of them claimed by ` +
+            `anchored attestations; none is attributable to this request, which claims no charge`
+          : `${unexplained.length} credit(s) to ${record.pay} that no anchored attestation claims: ` +
+            unexplained.map((t) => t.transaction_id).join(", ")));
     } else {
+      // A pre-v3 record names no seller account, so there is nothing to look at.
+      // Reported as an unchecked claim rather than a verified one.
       checks.push(check("no-settlement", "no settlement exists for this request", true,
-        "the anchored record names no transaction, which is the claim itself"));
+        `this record names no transaction and no seller account, so its claim of no charge could not ` +
+          `be corroborated against the ledger; records from format v3 onward carry the account`,
+        true));
     }
   }
 
@@ -376,6 +432,7 @@ export async function verifyCharge(args: Args): Promise<VerificationResult> {
     charged: claimedCharge,
     settlementTxId,
     format: declaredFormat,
+    feed: record?.feed ?? receipt?.feed ?? null,
     checks,
     links,
   };
@@ -413,7 +470,10 @@ export class NotEnoughEvidence extends Error {
 function render(result: VerificationResult, explain: boolean): string {
   const lines: string[] = [];
   lines.push("");
-  lines.push(`  request ${result.requestId}   note ${result.noteId}   format v${String(result.format)}`);
+  lines.push(
+    `  request ${result.requestId}   note ${result.noteId}   format v${String(result.format)}` +
+      (result.feed ? `   feed ${result.feed}` : ""),
+  );
   lines.push(
     `  decision: ${result.decision}${result.reason ? `  (${result.family} / ${result.reason})` : ""}`,
   );

@@ -1,6 +1,8 @@
 import { ALL_REFUSAL_REASONS, REFUSAL_DESCRIPTIONS, familyOf, httpStatusFor } from "./reasons.js";
 import { DEFAULT_POLICY, type CoveragePolicy } from "./policy.js";
 import { createUaid, type AgentIdentity } from "./hcs14.js";
+import { DOMAIN_NAME, DOMAIN_VERSION } from "./eip712.js";
+import { CURRENT_FORMAT } from "./format.js";
 
 export const REGISTRATION_PATH = "/.well-known/agent-registration.json";
 
@@ -12,6 +14,8 @@ export interface RegistrationInput {
   facilitatorUrl: string;
   topicId: string | null;
   policy?: CoveragePolicy;
+  /** The oracle signatures are bound to. Without it no domain is published. */
+  oracle?: { address: string; chainId: number };
 }
 
 /**
@@ -62,7 +66,7 @@ export function buildOnChainRegistration(input: RegistrationInput): Record<strin
     attestationSigner: { scheme: "eip712", address: input.attestorAddress, chainId: 296 },
     auditTrail: input.topicId ? { protocol: "hcs", topicId: input.topicId } : null,
     settlement: { chargedOn: [200], freeOn: [422, 424], flow: "authorization" },
-    policy: { id: policy.id, floorBps: policy.floorBps },
+    policy: { id: policy.id, loadLine: "per note, from LoadLine.lineOf" },
     // Compact taxonomy: [reason, family, httpStatus]. Never charged, all of them.
     refusals: ALL_REFUSAL_REASONS.map((reason) => [
       reason,
@@ -122,10 +126,20 @@ export function buildRegistration(input: RegistrationInput): Record<string, unkn
       attestationSigner: {
         scheme: "eip712",
         address: input.attestorAddress,
-        domain: { name: "Plimsoll Attestor", version: "1", chainId: 296 },
+        // The domain CoverageOracle recovers under. Publishing the retired
+        // service-invented domain here would tell a buyer to verify signatures
+        // against something no contract accepts.
+        domain: input.oracle
+          ? {
+              name: DOMAIN_NAME,
+              version: DOMAIN_VERSION,
+              chainId: input.oracle.chainId,
+              verifyingContract: input.oracle.address,
+            }
+          : null,
       },
       auditTrail: input.topicId
-        ? { protocol: "hcs", topicId: input.topicId, format: "plimsoll/coverage@1" }
+        ? { protocol: "hcs", topicId: input.topicId, format: `plimsoll/coverage@${CURRENT_FORMAT}` }
         : null,
     },
     /**
@@ -143,7 +157,7 @@ export function buildRegistration(input: RegistrationInput): Record<string, unkn
     },
     coveragePolicy: {
       id: policy.id,
-      floorBps: policy.floorBps,
+      loadLine: "per note, read from LoadLine.lineOf(noteId) at the time of the reading",
       maxStalenessSeconds: policy.maxStalenessSeconds,
       crossSourceToleranceBps: policy.crossSourceToleranceBps,
       attestationTtlSeconds: policy.attestationTtlSeconds,

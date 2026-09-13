@@ -17,6 +17,29 @@ export const TEST_FEE_PAYER = "0.0.7162784";
 export const TEST_PAY_TO = "0.0.999001";
 
 /**
+ * The oracle the suite signs for.
+ *
+ * Deliberately a fixed, obviously-fake address rather than the deployed one:
+ * these tests assert properties of the encoding, and they must not change
+ * meaning when the stack is redeployed. `test/typed-data.test.ts` is where the
+ * real contract gets the last word on whether the digest is right.
+ */
+export const TEST_ORACLE_ADDRESS = "0x0000000000000000000000000000000000c0ffee" as const;
+export const TEST_CHAIN_ID = 296;
+
+/** Signing-domain shape, for `createAttestorSigner` and `attestorDomain`. */
+export const TEST_ORACLE = {
+  chainId: TEST_CHAIN_ID,
+  verifyingContract: TEST_ORACLE_ADDRESS,
+} as const;
+
+/** Anchor-record shape, for `buildAnchorRecord`. */
+export const TEST_ANCHOR_ORACLE = {
+  address: TEST_ORACLE_ADDRESS,
+  chainId: TEST_CHAIN_ID,
+} as const;
+
+/**
  * A stand-in for the hosted facilitator, so the protocol-shape tests run with
  * no network and no funded account.
  *
@@ -124,7 +147,18 @@ export async function startStubMirror(): Promise<StubMirror> {
       return found ? send(200, { transactions: [found] }) : send(404, { _status: { messages: [] } });
     }
     if (url.pathname === "/api/v1/transactions") {
-      return send(200, { transactions: accountTransfers });
+      // The real mirror node honours timestamp=gte:/lte:, and the verifier now
+      // relies on that: an absence is only meaningful inside a stated window. A
+      // stub that returned everything regardless would let a test pass for a
+      // transfer that happened at a completely different time.
+      const bounds = url.searchParams.getAll("timestamp");
+      const lower = seconds(bounds.find((b) => b.startsWith("gte:")));
+      const upper = seconds(bounds.find((b) => b.startsWith("lte:")));
+      const within = accountTransfers.filter((tx) => {
+        const at = Number(tx.consensus_timestamp);
+        return (lower === null || at >= lower) && (upper === null || at <= upper);
+      });
+      return send(200, { transactions: within });
     }
     const topicMatch = url.pathname.match(/^\/api\/v1\/topics\/([^/]+)\/messages\/(\d+)$/);
     if (topicMatch) {
@@ -155,6 +189,12 @@ export async function startStubMirror(): Promise<StubMirror> {
   };
 }
 
+function seconds(bound: string | undefined): number | null {
+  if (!bound) return null;
+  const value = Number(bound.slice(bound.indexOf(":") + 1));
+  return Number.isFinite(value) ? value : null;
+}
+
 export function stubMirrorTransaction(args: {
   transactionId: string;
   payer: string;
@@ -163,11 +203,16 @@ export function stubMirrorTransaction(args: {
   result?: string;
   name?: string;
 }): MirrorTransaction {
+  // Consensus is taken from the id's valid-start rather than being a constant,
+  // so two stub transactions with different ids land at different times. With a
+  // fixed timestamp every transfer sits in every window, and a test asserting
+  // that one is out of range would pass for the wrong reason.
+  const validStart = args.transactionId.split("@")[1];
   return {
     transaction_id: args.transactionId.replace("@", "-").replace(/\.(\d+)$/, "-$1"),
     name: args.name ?? "CRYPTOTRANSFER",
     result: args.result ?? "SUCCESS",
-    consensus_timestamp: "1788800817.123456789",
+    consensus_timestamp: validStart ?? "1788800817.123456789",
     charged_tx_fee: 51000,
     transfers: [
       { account: args.payer, amount: -args.amount },
@@ -186,6 +231,7 @@ export function sellerConfig(overrides: Partial<SellerConfig> = {}): SellerConfi
     port: 0,
     publicBaseUrl: "http://localhost:0",
     attestorPrivateKey: TEST_ATTESTOR_KEY,
+    oracle: { address: TEST_ORACLE_ADDRESS, chainId: TEST_CHAIN_ID },
     coverageSource: "fixture",
     substreamsEndpoint: undefined,
     anchor: null,

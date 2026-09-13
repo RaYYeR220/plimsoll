@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { MalformedSnapshot, attest, coverageBpsOf, normalise } from "../src/attest.js";
-import { FixtureCoverageSource, LiveCoverageSource, UnknownNote } from "../src/coverage/index.js";
-import { createAttestorSigner } from "../src/eip712.js";
+import {
+  FixtureCoverageSource,
+  LiveCoverageSource,
+  UnknownNote,
+  type FixtureNote,
+} from "../src/coverage/index.js";
+import { createAttestorSigner, noteIdOf } from "../src/eip712.js";
 import { DEFAULT_POLICY } from "../src/policy.js";
-import { TEST_ATTESTOR_KEY } from "./helpers.js";
+import { TEST_ATTESTOR_KEY, TEST_ORACLE } from "./helpers.js";
 
-const signer = createAttestorSigner(TEST_ATTESTOR_KEY);
+const signer = createAttestorSigner(TEST_ATTESTOR_KEY, TEST_ORACLE);
 const source = new FixtureCoverageSource();
 
 describe("coverage arithmetic", () => {
@@ -36,12 +41,14 @@ describe("the decision engine", () => {
     assert.equal(verdict.httpStatus, 200);
     assert.equal(verdict.coverageBps, 13000);
     assert.equal(verdict.chargeable, true);
-    assert.equal(verdict.message.noteId, "NOTE-ALPHA");
-    assert.equal(verdict.message.coverageBps, 13000);
+    // The oracle knows a note by the keccak of its market code, not by the label.
+    assert.equal(verdict.message.noteId, noteIdOf("NOTE-ALPHA"));
+    assert.equal(verdict.message.coverageBps, 13000n);
     assert.equal(verdict.message.asOfBlock, 21480311n);
     assert.match(verdict.message.vaultSetHash, /^0x[0-9a-f]{64}$/);
     assert.match(verdict.message.sourceHash, /^0x[0-9a-f]{64}$/);
-    assert.match(verdict.message.nonce, /^0x[0-9a-f]{64}$/);
+    // A uint64 that has to increase, not a random bytes32.
+    assert.ok(verdict.message.nonce > 0n);
     assert.ok(verdict.message.expiry > 0n);
     assert.equal(verdict.attestor, signer.address);
   });
@@ -59,13 +66,14 @@ describe("the decision engine", () => {
   it("treats the load line as inclusive: exactly at par clears", async () => {
     const verdict = await attest("NOTE-JULIET", { source, signer });
     assert.equal(verdict.decision, "attested");
-    assert.equal(verdict.coverageBps, DEFAULT_POLICY.floorBps);
+    assert.equal(verdict.coverageBps, 10000, "exactly at NOTE-JULIET's own line");
   });
 
   it("refuses one basis point below the line", async () => {
     const shaved = new FixtureCoverageSource({}, [
       {
         noteId: "NOTE-HAIR",
+        thresholdBps: 10000,
         holder: "0x00000000000000000000000000000000006f1a55",
         nominatedVaults: ["0x4626aa11c0ffee0000000000000000000000a001"],
         notesOutstanding: "100000",
@@ -98,6 +106,7 @@ describe("the decision engine", () => {
     const empty = new FixtureCoverageSource({}, [
       {
         noteId: "NOTE-VOID",
+        thresholdBps: 10000,
         holder: "0x00000000000000000000000000000000006f1a55",
         nominatedVaults: [],
         notesOutstanding: "0",
@@ -110,6 +119,65 @@ describe("the decision engine", () => {
       },
     ]);
     await assert.rejects(() => attest("NOTE-VOID", { source: empty, signer }), MalformedSnapshot);
+  });
+});
+
+describe("the load line is read with the note, never taken from policy", () => {
+  /** 96,000 of backing against a 100,000 obligation: 9600 bps. */
+  function note9600(noteId: string, thresholdBps?: number): FixtureNote {
+    return {
+      noteId,
+      ...(thresholdBps === undefined ? {} : { thresholdBps }),
+      holder: "0x00000000000000000000000000000000006f1a55",
+      nominatedVaults: ["0x4626aa11c0ffee0000000000000000000000a001"],
+      notesOutstanding: "100000",
+      parPerNote: "1000000",
+      unitDecimals: 6,
+      asOfBlock: "1",
+      observedAt: -1,
+      sourceSet: { kind: "fixture", dataset: "line", endpoints: [] },
+      positions: [
+        {
+          vault: "0x4626aa11c0ffee0000000000000000000000a001",
+          shares: "1",
+          assets: "96000000000",
+          assetDecimals: 6,
+          blockNumber: "1",
+        },
+      ],
+    };
+  }
+
+  it("attests 9600 bps against a note whose line is 9500", async () => {
+    const verdict = await attest("NOTE-LINE", {
+      source: new FixtureCoverageSource({}, [note9600("NOTE-LINE", 9500)]),
+      signer,
+    });
+    assert.equal(verdict.decision, "attested");
+    assert.equal(verdict.evidence!.floorBps, 9500, "the evidence names the line that was applied");
+  });
+
+  it("refuses the identical readings against a note whose line is 10000", async () => {
+    // Same backing, same obligation, different line. If the threshold came from
+    // a service-wide setting these two would get the same answer.
+    const verdict = await attest("NOTE-LINE", {
+      source: new FixtureCoverageSource({}, [note9600("NOTE-LINE", 10000)]),
+      signer,
+    });
+    assert.equal(verdict.decision, "refused");
+    assert.equal(verdict.reason, "coverage_below_floor");
+    assert.equal(verdict.detail.floorBps, 10000);
+  });
+
+  it("refuses as an evidence failure when the line cannot be read, rather than falling back", async () => {
+    const verdict = await attest("NOTE-LINE", {
+      source: new FixtureCoverageSource({}, [note9600("NOTE-LINE")]),
+      signer,
+    });
+    assert.equal(verdict.decision, "refused");
+    assert.equal(verdict.family, "evidence", "no line is a gap in our evidence, not a finding about the note");
+    assert.equal(verdict.reason, "source_unavailable");
+    assert.equal(verdict.coverageBps, null, "no ratio is quoted against a line nobody read");
   });
 });
 

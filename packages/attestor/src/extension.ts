@@ -94,7 +94,9 @@ export function refusalDeclaration(policy: CoveragePolicy): Record<string, unkno
     statement:
       "A refusal returns 4xx. The middleware cancels settlement before the facilitator is called, " +
       "so no transfer is ever submitted. There is no charge to refund and no transaction to void.",
-    floorBps: policy.floorBps,
+    // There is no service-wide floor to advertise: each note is measured against
+    // its own line in LoadLine, read alongside its readings.
+    loadLine: "per note, read from LoadLine.lineOf(noteId) at the time of the reading",
     policyId: policy.id,
     families: {
       asset: {

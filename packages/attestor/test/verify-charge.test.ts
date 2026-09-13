@@ -9,14 +9,16 @@ import { FixtureCoverageSource } from "../src/coverage/index.js";
 import { attestationToWire, createAttestorSigner, refusalToWire } from "../src/eip712.js";
 import { ReceiptStore, type StoredReceipt } from "../src/receipts.js";
 import {
+  TEST_ANCHOR_ORACLE,
   TEST_ATTESTOR_KEY,
+  TEST_ORACLE,
   TEST_PAY_TO,
   startStubMirror,
   stubMirrorTransaction,
   type StubMirror,
 } from "./helpers.js";
 
-const signer = createAttestorSigner(TEST_ATTESTOR_KEY);
+const signer = createAttestorSigner(TEST_ATTESTOR_KEY, TEST_ORACLE);
 const source = new FixtureCoverageSource();
 const DATA_DIR = `data/test/${randomBytes(4).toString("hex")}`;
 const PAYER = "0.0.999002";
@@ -47,7 +49,7 @@ async function record(
 ): Promise<{ receipt: StoredReceipt; anchor: AnchorRecord }> {
   const verdict = await attest(noteId, { source, signer });
   const charge = charged ? { transactionId: SETTLEMENT_TX } : null;
-  const anchor = buildAnchorRecord({ requestId, verdict, charge });
+  const anchor = buildAnchorRecord({ payTo: TEST_PAY_TO, oracle: TEST_ANCHOR_ORACLE, requestId, verdict, charge });
   const receipt: StoredReceipt = {
     requestId,
     noteId: verdict.noteId,
@@ -322,7 +324,7 @@ describe("the verifier needs no credentials", () => {
     // refusal carries no floor and no ratio, and this once crashed on a null
     // receipt because it assumed one of the two sources would supply a floor.
     const verdict = await attest("NOTE-INDIA", { source, signer });
-    const anchor = buildAnchorRecord({ requestId: "cccc000000000001", verdict, charge: null });
+    const anchor = buildAnchorRecord({ payTo: TEST_PAY_TO, oracle: TEST_ANCHOR_ORACLE, requestId: "cccc000000000001", verdict, charge: null });
     assert.equal("floor" in anchor, false);
     publishToTopic(21, anchor);
 
@@ -333,16 +335,16 @@ describe("the verifier needs no credentials", () => {
     assert.ok(result.checks.every((c) => c.passed), JSON.stringify(result.checks.filter((c) => !c.passed)));
   });
 
-  it("convicts a v1-labelled record in the v2 encoding from the record alone", async () => {
+  it("convicts a v1-labelled record in the current encoding from the record alone", async () => {
     const verdict = await attest("NOTE-INDIA", { source, signer });
-    const anchor = { ...buildAnchorRecord({ requestId: "cccc000000000002", verdict, charge: null }), v: 1 };
+    const anchor = { ...buildAnchorRecord({ payTo: TEST_PAY_TO, oracle: TEST_ANCHOR_ORACLE, requestId: "cccc000000000002", verdict, charge: null }), v: 1 };
     publishToTopic(22, anchor as AnchorRecord);
 
     const result = await verifyCharge(args({ hcs: { topicId: "0.0.10451091", sequenceNumber: 22 } }));
     assert.equal(result.verdict, "DISCREPANCY");
     const encoding = result.checks.find((c) => c.id === "encoding-v1")!;
     assert.equal(encoding.passed, false);
-    assert.match(encoding.detail, /v2 encoding under a v1 label/);
+    assert.match(encoding.detail, /later encoding under a v1 label/);
   });
 
   it("refuses to guess when there is nothing to check", async () => {

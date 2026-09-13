@@ -3,15 +3,16 @@ import { describe, it } from "node:test";
 import { attest, RATIO_BEARING_REASONS } from "../src/attest.js";
 import { FixtureCoverageSource, LiveCoverageSource } from "../src/coverage/index.js";
 import {
+  attestorDomain,
   createAttestorSigner,
   isAssetRefusalMessage,
   recoverRefusalSigner,
   refusalToWire,
 } from "../src/eip712.js";
 import { ALL_REFUSAL_REASONS, familyOf, httpStatusFor, type RefusalReason } from "../src/reasons.js";
-import { TEST_ATTESTOR_KEY } from "./helpers.js";
+import { TEST_ATTESTOR_KEY, TEST_ORACLE } from "./helpers.js";
 
-const signer = createAttestorSigner(TEST_ATTESTOR_KEY);
+const signer = createAttestorSigner(TEST_ATTESTOR_KEY, TEST_ORACLE);
 const source = new FixtureCoverageSource();
 
 /** One fixture per reason. Every entry in the taxonomy must be reachable. */
@@ -51,7 +52,11 @@ describe("the refusal taxonomy", () => {
         familyOf(reason) === "asset",
       );
 
-      const recovered = await recoverRefusalSigner(verdict.message, verdict.signature);
+      const recovered = await recoverRefusalSigner(
+        attestorDomain(TEST_ORACLE),
+        verdict.message,
+        verdict.signature,
+      );
       assert.equal(recovered, signer.address, "the refusal must be signed by the attestor");
     });
   }

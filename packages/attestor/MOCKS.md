@@ -9,18 +9,74 @@ attestation at all.
 
 ### The coverage data
 
-**`src/coverage/fixtures/*.json` is the only working data source today.**
+**Fixtures are for tests and the offline demo, and they only ever describe synthetic
+notes (`NOTE-ALPHA` … `NOTE-JULIET`).** Nothing built from a fixture is submitted to
+`CoverageOracle`, and no fixture describes a real note.
 
-The production source is a Substreams pipeline over ERC-4626 vault flows, built
-separately and not ready. `LiveCoverageSource` (`src/coverage/live.ts`) is its typed
-placeholder and throws `SourceUnavailable` on every call. It is not a partial
-implementation and deliberately so: a source that returned a plausible number from an
-incomplete index would produce a signed attestation nobody can reproduce, which is the
-exact failure this product exists to prevent.
+`LiveCoverageSource` (`src/coverage/live.ts`) reads real ERC-4626 positions on Base and
+real note liabilities on Hedera — supply, par, issuer, the note's own load line from
+`LoadLine`, and the vault set it is registered with on `CoverageOracle` — behind the
+same `CoverageSource` contract. It is selected with `COVERAGE_SOURCE=live` and
+`LIVE_NOTES_FILE`; unconfigured, it refuses with `source_unavailable` rather than
+guessing. `bin/submit-oracle.ts` accepts only its readings.
 
-Setting `COVERAGE_SOURCE=live` today yields a service that refuses every request with
-`source_unavailable`. That is the honest behaviour, not a broken one, and it is covered
-by a test.
+Point `BASE_RPC_URL` at a dependable endpoint. The default, `mainnet.base.org`,
+throttles hard enough that an unfunded note comes back as `source_unavailable` — an
+honest refusal, but about our evidence, where the true answer is an asset finding.
+
+Whether a figure was measured is the distinction most easily lost, so it is not left to
+this document:
+
+### Every record says where its numbers came from
+
+A format v3 record carries `feed`, naming the source that produced its readings.
+`fixture` means the figures came from checked-in JSON, not from a chain.
+
+This is in the record rather than only here because an HCS sequence outlives every
+document that explains it. The topic has no admin key; sequence 22 will still be
+readable long after this file has been rewritten, and without `feed` a reader finding
+it would have no way to tell a demonstration from a measurement — the signature, the
+arithmetic, the payment and the anchoring are all equally real either way.
+`verify-charge` prints it on every verdict and flags a simulated feed as a note, and
+`packages/verify` prints it on every line of section 5.
+
+### A fixture-derived attestation that reached the oracle
+
+This happened, it is permanent, and it is exactly the failure this file exists to
+prevent, so it is stated here rather than left for someone to find.
+
+On 2026-09-12, while the attestation format was being moved onto `CoverageOracle`'s
+struct, `bin/submit-oracle.ts` built an attestation for **PLIM-B** from
+`src/coverage/fixtures/plim-b.json` — two invented positions totalling 15.00 against a
+10.00 obligation — and submitted it:
+
+| transaction | EVM hash | outcome |
+| --- | --- | --- |
+| `0.0.10448897@1789170002.090019887` | `0xc0370dfaea84d47ac6783df5d55f35f579af218951eeee2a0c470e542e422439` | accepted, stored at **15000 bps** |
+| `0.0.10448897@1789169999.900969762` | `0x4b414352cb6d0aa671a81966692877528d7d90db191133dc3899e7934ae36c04` | the same bytes replayed, reverted `StaleAttestation(1789170005, 1789170005)` |
+
+PLIM-B's holder on Base had never been funded. Its real coverage at that moment was
+zero, so the first transaction records a real note as 150% covered when it held
+nothing. It signed over `PLACEHOLDER-NOT-A-VAULT-SET`, which `setVaultSet` has since
+replaced, so it can never count toward the line again, and it expired five minutes
+after it was issued. It remains readable, and it is not evidence of anything.
+
+What changed as a result:
+
+- `plim-a.json` and `plim-b.json` are deleted. No fixture describes a real note.
+- `bin/submit-oracle.ts` refuses any simulated source and any verdict whose `feed` is
+  simulated, never submits a refusal, and sends nothing without `--submit`. Its
+  canonical use is `--receipt`, which submits the exact attestation a buyer paid for
+  and the service anchored, rather than signing a second copy.
+- The attestation cited as accepted on chain is a live reading, not this one.
+
+### Sequences 22–24
+
+Anchor records 22, 23 and 24 are v3 records produced from fixtures, and each says
+`"feed": "fixture"`. Records 22 and 23 carry the market codes PLIM-B and PLIM-A with
+invented figures — 15000 and 0 bps — for the same reason as above. They are kept on
+the topic, which has no admin key, and they are not cited: the canonical records are
+live readings.
 
 ### What the fixtures stand in for
 
@@ -69,7 +125,9 @@ Everything below runs against live infrastructure and is exercised by the test s
 | Settlement | real. Hosted Blocky402 facilitator at `api.testnet.blocky402.com`, `exact` scheme, `hedera:testnet`. |
 | The free refusal | real. Any status `>= 400` cancels settlement before `/settle` is called. Verified against a stub facilitator that counts calls, **and** against the public mirror node. |
 | HBAR movement | real. Buyer debited, seller credited, facilitator pays the network fee. |
-| EIP-712 signing | real. Attestations and refusals are signed and recovered with `viem`. |
+| EIP-712 signing | real, and now the contract's own format. Attestations are signed as the struct `CoverageOracle` recovers, under a domain bound to that oracle; `test/typed-data.test.ts` checks our digest against the deployed contract's `hashAttestation`. |
+| The load line | real. Read per note from `LoadLine.lineOf` alongside the note's other figures; a line that cannot be read is an evidence refusal, never a default. PLIM-A's is 9500 bps and PLIM-B's 10000. |
+| On-chain acceptance | a live attestation only. The earlier fixture-derived submission is disclosed above and is not cited. |
 | HCS anchoring | real. Consensus messages on a topic with a submit key and no admin key, each under 1024 bytes, single-chunk. |
 | Mirror node | real. Public REST API, no credentials. |
 | ERC-8004 identity | real. `register()` on the deployed registry at `0x8004A818…`, chain 296. |
@@ -87,7 +145,16 @@ withdrawn, including our mistakes. Every record carries a format version in
 | --- | --- | --- | --- |
 | v1 | 1–11 | full numeric block always written, zeroed where unknown | single `Refusal` struct |
 | v1 label, v2 content | 12–16 | figures omitted where not established | `AssetRefusal` / `EvidenceRefusal` |
-| v2 | 17 onward | figures omitted where not established | `AssetRefusal` / `EvidenceRefusal` |
+| v2 | 17–21 | figures omitted where not established | `AssetRefusal` / `EvidenceRefusal` |
+| v3 | 22 onward | as v2, plus `nid`, `orc`, `cid`, `pay` and `feed` | as v2; attestations move to `CoverageOracle`'s own struct |
+
+v3 is where the attestation stopped being ours to shape. v1 and v2 signed a
+`string` note id, a `uint32` coverage and a random `bytes32` nonce under a domain
+naming no contract — a digest the deployed oracle does not recover, so those
+signatures could never have been accepted on chain. From v3 the signed struct is
+the contract's, the domain names the contract, and the record carries the oracle
+and chain (`orc`, `cid`) so a reader can rebuild that domain from the record
+alone.
 
 Sequences 12–16 are why the version exists. They were written after the
 encoding changed and before the label did, so nothing in the record told a

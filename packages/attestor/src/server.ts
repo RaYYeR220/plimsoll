@@ -5,7 +5,7 @@ import { HTTPFacilitatorClient, x402ResourceServer } from "@x402/core/server";
 import type { RoutesConfig } from "@x402/core/server";
 import { paymentMiddleware } from "@x402/express";
 import { ExactHederaScheme } from "@x402/hedera/exact/server";
-import { MalformedSnapshot, attest, type Verdict } from "./attest.js";
+import { ClockNonces, MalformedSnapshot, attest, type Verdict } from "./attest.js";
 import { type Anchor, HcsAnchor, NullAnchor, buildAnchorRecord } from "./anchor.js";
 import { createCoverageSource, UnknownNote, type CoverageSource } from "./coverage/index.js";
 import { createAttestorSigner } from "./eip712.js";
@@ -16,6 +16,7 @@ import { NonceStore, ReceiptStore, type StoredReceipt } from "./receipts.js";
 import { REGISTRATION_PATH, buildRegistration } from "./registration.js";
 import { currentContext, newRequestId, runWithContext, type RequestContext } from "./context.js";
 import { hashscanTopic } from "./mirror.js";
+import type { Address } from "viem";
 import type { SellerConfig } from "./config.js";
 
 export interface AttestorService {
@@ -38,9 +39,19 @@ export function createService(options: CreateServiceOptions): AttestorService {
   const policy = options.policy ?? DEFAULT_POLICY;
   const source =
     options.source ?? createCoverageSource(config.coverageSource, config.substreamsEndpoint);
-  const signer = createAttestorSigner(config.attestorPrivateKey);
+  // Bound to the oracle named in the deployment record, so a signature produced
+  // here is one that contract can accept and no other contract can.
+  const oracle = {
+    chainId: config.oracle.chainId,
+    verifyingContract: config.oracle.address as Address,
+  };
+  const signer = createAttestorSigner(config.attestorPrivateKey, oracle);
   const receipts = new ReceiptStore(config.dataDir);
   const nonces = new NonceStore(config.dataDir);
+  // One nonce source for the whole service. The oracle rejects any nonce at or
+  // below the one it already holds for a note, so a per-request instance would
+  // hand out the same second twice for two verdicts on the same note.
+  const nonceSource = new ClockNonces();
   const anchor = options.anchor ?? (config.anchor ? new HcsAnchor(config.anchor) : new NullAnchor());
   const anchoringEnabled = !(anchor instanceof NullAnchor);
 
@@ -101,6 +112,8 @@ export function createService(options: CreateServiceOptions): AttestorService {
       verdict: request.verdict,
       charge,
       maxPositions: policy.maxAnchoredPositions,
+      payTo: config.payTo,
+      oracle: config.oracle,
     });
 
     let anchorReceipt: StoredReceipt["anchor"] = null;
@@ -154,8 +167,9 @@ export function createService(options: CreateServiceOptions): AttestorService {
       payTo: config.payTo,
       priceTinybar: config.amountTinybar,
       attestor: signer.address,
+      oracle: { address: config.oracle.address, chainId: config.oracle.chainId },
       coverageSource: source.id,
-      policy: { id: policy.id, floorBps: policy.floorBps },
+      policy: { id: policy.id, loadLine: "per note, from LoadLine.lineOf" },
       anchoring: anchoringEnabled
         ? { topicId: config.anchor?.topicId, hashscan: hashscanTopic(config.anchor?.topicId ?? "") }
         : null,
@@ -172,6 +186,7 @@ export function createService(options: CreateServiceOptions): AttestorService {
         facilitatorUrl: config.facilitatorUrl,
         topicId: config.anchor?.topicId ?? null,
         policy,
+        oracle: config.oracle,
       }),
     );
   });
@@ -201,7 +216,7 @@ export function createService(options: CreateServiceOptions): AttestorService {
 
     let verdict: Verdict;
     try {
-      verdict = await attest(noteId, { source, signer, policy });
+      verdict = await attest(noteId, { source, signer, policy, nonces: nonceSource });
     } catch (error) {
       if (error instanceof UnknownNote) {
         res.status(404).json({ error: "unknown_note", noteId });
@@ -218,7 +233,7 @@ export function createService(options: CreateServiceOptions): AttestorService {
       request.verdict = verdict;
       // Claiming the nonce at issue time is what makes a later replay
       // detectable: the same nonce can never be signed twice.
-      nonces.claim(verdict.message.nonce);
+      nonces.claim(String(verdict.message.nonce));
       receipts.write(toStoredReceipt(request, verdict, config));
     }
 
@@ -229,7 +244,8 @@ export function createService(options: CreateServiceOptions): AttestorService {
             requestId: request?.requestId ?? null,
             noteId: verdict.noteId,
             coverageBps: verdict.coverageBps,
-            floorBps: policy.floorBps,
+            // The line this note was measured against, as read with its readings.
+            floorBps: verdict.evidence.floorBps,
             attestation: attestationToWire(verdict.message),
             signature: verdict.signature,
             attestor: verdict.attestor,
@@ -302,6 +318,7 @@ function toStoredReceipt(
         : refusalToWire(verdict.message),
     signature: verdict.signature,
     attestor: verdict.attestor,
+    feed: verdict.feed,
     sourceHash: verdict.sourceHash,
     evidence: verdict.evidence,
     chargeTransactionId: null,

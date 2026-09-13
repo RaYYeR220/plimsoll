@@ -11,7 +11,7 @@ import {
   type AttestationMessage,
   type AttestorSigner,
   type RefusalMessage,
-  familyCode,
+  noteIdOf,
 } from "./eip712.js";
 import { DEFAULT_POLICY, type CoveragePolicy, policyHash } from "./policy.js";
 import {
@@ -33,6 +33,15 @@ export class MalformedSnapshot extends Error {
   }
 }
 
+/**
+ * `CoverageOracle` rejects anything above this as a malformed feed rather than
+ * a solvent issuer, so the ratio is capped here too. Capping can only ever
+ * understate coverage, and an understated ratio that still clears the load line
+ * is safe; reporting 200x as 100x costs nothing, while signing a number the
+ * oracle will refuse costs the whole attestation.
+ */
+export const MAX_PLAUSIBLE_COVERAGE_BPS = 1_000_000n;
+
 /** One position after decimal normalisation, kept so a stranger can redo the sum. */
 export interface NormalisedPosition {
   vault: string;
@@ -53,6 +62,8 @@ export interface NormalisedPosition {
  */
 export interface Evidence {
   noteId: string;
+  /** keccak256 of the market code: the id the oracle knows the note by. */
+  noteIdHash: string;
   holder: string;
   policyId: string;
   policyHash: Hex;
@@ -68,14 +79,20 @@ export interface Evidence {
   /** Sum of normalisedAssets. The numerator. */
   attributableValue: string;
   sourceSet: { kind: string; dataset: string; endpoints: string[] };
-  vaultSetHash: Hex;
+  /** What the attestation commits to: the set registered on the oracle. */
+  vaultSetHash: string;
+  /** What the vault set we actually read hashes to. Anyone can compare the two. */
+  observedVaultSetHash: Hex;
 }
 
 export interface AttestedVerdict {
   decision: "attested";
   httpStatus: 200;
   noteId: string;
+  noteIdHash: Hex;
   coverageBps: number;
+  /** Source that produced the readings. "fixture" means simulated, not measured. */
+  feed: string;
   message: AttestationMessage;
   signature: Hex;
   attestor: string;
@@ -89,6 +106,7 @@ export interface RefusedVerdict {
   decision: "refused";
   httpStatus: 422 | 424;
   noteId: string;
+  noteIdHash: Hex;
   family: RefusalFamily;
   reason: RefusalReason;
   description: string;
@@ -96,6 +114,8 @@ export interface RefusedVerdict {
   coverageKnown: boolean;
   /** Null whenever no ratio was established. Never zero: zero is a claim. */
   coverageBps: number | null;
+  /** Source that produced the readings. "fixture" means simulated, not measured. */
+  feed: string;
   message: RefusalMessage;
   signature: Hex;
   /** Always null for the evidence family, which asserts it has none. */
@@ -108,16 +128,39 @@ export interface RefusedVerdict {
 
 export type Verdict = AttestedVerdict | RefusedVerdict;
 
+/**
+ * Nonces are `uint64` and must strictly increase per note: the oracle rejects
+ * anything at or below the nonce it already recorded. Wall-clock seconds are
+ * monotonic and need no coordination, with a bump when two verdicts land in the
+ * same second.
+ */
+export interface NonceSource {
+  next(noteIdHash: string): bigint;
+}
+
+export class ClockNonces implements NonceSource {
+  private readonly issued = new Map<string, bigint>();
+  constructor(private readonly now: () => number = () => Math.floor(Date.now() / 1000)) {}
+  next(noteIdHash: string): bigint {
+    const seconds = BigInt(this.now());
+    const last = this.issued.get(noteIdHash);
+    const nonce = last === undefined || seconds > last ? seconds : last + 1n;
+    this.issued.set(noteIdHash, nonce);
+    return nonce;
+  }
+}
+
 export interface AttestOptions {
   source: CoverageSource;
   signer: AttestorSigner;
   policy?: CoveragePolicy;
   /** Injected clock in unix seconds, so expiry and staleness are testable. */
   now?: () => number;
-  /** Injected nonce, so a replay can be constructed deliberately in tests. */
-  nonce?: () => Hex;
+  nonces?: NonceSource;
   atBlock?: bigint;
 }
+
+const ZERO_HASH = `0x${"00".repeat(32)}` as Hex;
 
 /**
  * Adjudicate one note.
@@ -133,7 +176,8 @@ export interface AttestOptions {
 export async function attest(noteId: string, options: AttestOptions): Promise<Verdict> {
   const policy = options.policy ?? DEFAULT_POLICY;
   const now = options.now ?? (() => Math.floor(Date.now() / 1000));
-  const nextNonce = options.nonce ?? (() => `0x${randomBytes(32).toString("hex")}` as Hex);
+  const nonces = options.nonces ?? new ClockNonces(now);
+  const noteIdHash = noteIdOf(noteId);
 
   let snapshot: CoverageSnapshot;
   try {
@@ -146,14 +190,16 @@ export async function attest(noteId: string, options: AttestOptions): Promise<Ve
       // shape of a fact.
       return refuse({
         noteId,
+        noteIdHash,
         reason: error.reason,
         evidence: null,
         coverage: null,
         detail: error.detail,
         policy,
         signer: options.signer,
+        feed: options.source.id,
         now: now(),
-        nonce: nextNonce(),
+        nonce: nonces.next(noteIdHash),
       });
     }
     throw error;
@@ -167,7 +213,7 @@ export async function attest(noteId: string, options: AttestOptions): Promise<Ve
     });
   }
 
-  const evidence = buildEvidence(snapshot, policy);
+  const evidence = buildEvidence(snapshot, policy, noteIdHash);
   const timestamp = now();
 
   // Staleness first: a ratio computed from data we already consider unusable
@@ -176,14 +222,16 @@ export async function attest(noteId: string, options: AttestOptions): Promise<Ve
   if (age > policy.maxStalenessSeconds) {
     return refuse({
       noteId: snapshot.noteId,
+      noteIdHash,
       reason: "data_stale",
       evidence,
       coverage: null,
       detail: { ageSeconds: age, toleranceSeconds: policy.maxStalenessSeconds },
       policy,
       signer: options.signer,
+      feed: options.source.id,
       now: timestamp,
-      nonce: nextNonce(),
+      nonce: nonces.next(noteIdHash),
     });
   }
 
@@ -194,6 +242,7 @@ export async function attest(noteId: string, options: AttestOptions): Promise<Ve
   if (overdeclared.length > 0) {
     return refuse({
       noteId: snapshot.noteId,
+      noteIdHash,
       reason: "declared_exceeds_real",
       evidence,
       coverage: null,
@@ -206,8 +255,9 @@ export async function attest(noteId: string, options: AttestOptions): Promise<Ve
       },
       policy,
       signer: options.signer,
+      feed: options.source.id,
       now: timestamp,
-      nonce: nextNonce(),
+      nonce: nonces.next(noteIdHash),
     });
   }
 
@@ -215,45 +265,50 @@ export async function attest(noteId: string, options: AttestOptions): Promise<Ve
   const obligation = BigInt(evidence.obligation);
 
   // Checked before the ratio, because "nothing is backing this" is a more
-  // precise finding than "the ratio is 0".
+  // precise finding than "the ratio is 0". A source that reads the chain and
+  // finds no positions has told us something true about the asset.
   if (snapshot.positions.length === 0 || attributable === 0n) {
     return refuse({
       noteId: snapshot.noteId,
+      noteIdHash,
       reason: "no_attributable_positions",
       evidence,
       coverage: 0,
       detail: { positions: snapshot.positions.length },
       policy,
       signer: options.signer,
+      feed: options.source.id,
       now: timestamp,
-      nonce: nextNonce(),
+      nonce: nonces.next(noteIdHash),
     });
   }
 
   const coverageBps = coverageBpsOf(attributable, obligation);
-  if (coverageBps < policy.floorBps) {
+  if (coverageBps < snapshot.thresholdBps) {
     return refuse({
       noteId: snapshot.noteId,
+      noteIdHash,
       reason: "coverage_below_floor",
       evidence,
       coverage: coverageBps,
-      detail: { coverageBps, floorBps: policy.floorBps },
+      detail: { coverageBps, floorBps: snapshot.thresholdBps },
       policy,
       signer: options.signer,
+      feed: options.source.id,
       now: timestamp,
-      nonce: nextNonce(),
+      nonce: nonces.next(noteIdHash),
     });
   }
 
   const sourceHash = canonicalHash(evidence);
   const message: AttestationMessage = {
-    noteId: snapshot.noteId,
-    coverageBps,
+    noteId: noteIdHash,
+    coverageBps: BigInt(coverageBps),
     asOfBlock: snapshot.asOfBlock,
-    vaultSetHash: evidence.vaultSetHash,
+    vaultSetHash: evidence.vaultSetHash as Hex,
     sourceHash,
     expiry: BigInt(timestamp + policy.attestationTtlSeconds),
-    nonce: nextNonce(),
+    nonce: nonces.next(noteIdHash),
   };
   const signature = await options.signer.signAttestation(message);
 
@@ -261,12 +316,14 @@ export async function attest(noteId: string, options: AttestOptions): Promise<Ve
     decision: "attested",
     httpStatus: 200,
     noteId: snapshot.noteId,
+    noteIdHash,
     coverageBps,
     message,
     signature,
     attestor: options.signer.address,
     evidence,
     sourceHash,
+    feed: options.source.id,
     chargeable: true,
   };
 }
@@ -281,13 +338,10 @@ export async function attest(noteId: string, options: AttestOptions): Promise<Ve
 export function coverageBpsOf(attributableValue: bigint, obligation: bigint): number {
   if (obligation <= 0n) throw new MalformedSnapshot("obligation must be positive");
   const bps = (attributableValue * 10_000n) / obligation;
-  // uint32 in the signed payload. A note covered 429,496x is not a real case,
-  // but clamping keeps the encoder total rather than throwing on absurd input.
-  const max = 4_294_967_295n;
-  return Number(bps > max ? max : bps);
+  return Number(bps > MAX_PLAUSIBLE_COVERAGE_BPS ? MAX_PLAUSIBLE_COVERAGE_BPS : bps);
 }
 
-function buildEvidence(snapshot: CoverageSnapshot, policy: CoveragePolicy): Evidence {
+function buildEvidence(snapshot: CoverageSnapshot, policy: CoveragePolicy, noteIdHash: Hex): Evidence {
   const positions: NormalisedPosition[] = snapshot.positions.map((p) => ({
     vault: p.vault,
     shares: p.shares.toString(),
@@ -303,10 +357,12 @@ function buildEvidence(snapshot: CoverageSnapshot, policy: CoveragePolicy): Evid
 
   return {
     noteId: snapshot.noteId,
+    noteIdHash,
     holder: snapshot.holder,
     policyId: policy.id,
     policyHash: policyHash(policy),
-    floorBps: policy.floorBps,
+    // The note's own line, as its source read it from LoadLine. Never a policy value.
+    floorBps: snapshot.thresholdBps,
     asOfBlock: snapshot.asOfBlock.toString(),
     observedAt: snapshot.observedAt,
     unitDecimals: snapshot.unitDecimals,
@@ -320,7 +376,8 @@ function buildEvidence(snapshot: CoverageSnapshot, policy: CoveragePolicy): Evid
       dataset: snapshot.sourceSet.dataset,
       endpoints: [...snapshot.sourceSet.endpoints],
     },
-    vaultSetHash: canonicalHash([...snapshot.nominatedVaults].sort()),
+    vaultSetHash: snapshot.registeredVaultSetHash,
+    observedVaultSetHash: canonicalHash([...snapshot.nominatedVaults].sort()),
   };
 }
 
@@ -338,6 +395,7 @@ export function normalise(amount: bigint, from: number, to: number): bigint {
 
 interface RefuseArgs {
   noteId: string;
+  noteIdHash: Hex;
   reason: RefusalReason;
   evidence: Evidence | null;
   /** The ratio, when we actually have one. `null` means we could not tell. */
@@ -345,11 +403,11 @@ interface RefuseArgs {
   detail: Record<string, unknown>;
   policy: CoveragePolicy;
   signer: AttestorSigner;
+  /** Source that produced the readings, carried onto the verdict and the record. */
+  feed: string;
   now: number;
-  nonce: Hex;
+  nonce: bigint;
 }
-
-const ZERO_HASH = `0x${"00".repeat(32)}` as Hex;
 
 async function refuse(args: RefuseArgs): Promise<RefusedVerdict> {
   const family = familyOf(args.reason);
@@ -361,39 +419,38 @@ async function refuse(args: RefuseArgs): Promise<RefusedVerdict> {
     throw new Error(`evidence refusal ${args.reason} must not carry a coverage ratio`);
   }
 
-  const sourceHash = args.evidence ? canonicalHash(args.evidence) : ZERO_HASH;
+  const sourceHash = args.evidence ? canonicalHash(args.evidence) : null;
   const expiry = BigInt(args.now + args.policy.attestationTtlSeconds);
 
   // An evidence refusal is signed as a type that has no room for a ratio, a
-  // block or a hash. Previously these were zeroed into a shared struct, which
-  // meant "we could not tell" went out as the number 0 and read as zero percent
-  // coverage. Absence is unambiguous where a zero is not.
+  // block or a hash. Absence is unambiguous where a zero is not.
   const message: RefusalMessage =
     family === "evidence"
-      ? { noteId: args.noteId, reason: args.reason, expiry, nonce: args.nonce }
+      ? { noteId: args.noteIdHash, reason: args.reason, expiry, nonce: args.nonce }
       : {
-          noteId: args.noteId,
+          noteId: args.noteIdHash,
           reason: args.reason,
           coverageKnown: args.coverage !== null,
-          coverageBps: args.coverage ?? 0,
+          coverageBps: BigInt(args.coverage ?? 0),
           asOfBlock: args.evidence ? BigInt(args.evidence.asOfBlock) : 0n,
-          vaultSetHash: args.evidence ? args.evidence.vaultSetHash : ZERO_HASH,
-          sourceHash,
+          vaultSetHash: (args.evidence?.vaultSetHash as Hex) ?? ZERO_HASH,
+          sourceHash: sourceHash ?? ZERO_HASH,
           expiry,
           nonce: args.nonce,
         };
   const signature = await args.signer.signRefusal(message);
 
   // An evidence refusal publishes nothing it declined to trust. Keeping the
-  // snapshot around under the name "evidence" would reintroduce, one layer down,
-  // exactly the conflation the split type exists to prevent. The diagnostic that
-  // explains the refusal lives in `detail`, which is not a coverage claim.
+  // snapshot under the name "evidence" would reintroduce, one layer down, the
+  // conflation the split type exists to prevent. The diagnostic that explains
+  // the refusal lives in `detail`, which is not a coverage claim.
   const publishedEvidence = family === "evidence" ? null : args.evidence;
 
   return {
     decision: "refused",
     httpStatus: httpStatusFor(family),
     noteId: args.noteId,
+    noteIdHash: args.noteIdHash,
     family,
     reason: args.reason,
     description: REFUSAL_DESCRIPTIONS[args.reason],
@@ -401,10 +458,11 @@ async function refuse(args: RefuseArgs): Promise<RefusedVerdict> {
     coverageBps: args.coverage,
     message,
     signature,
-    attestor: args.signer.address,
     evidence: publishedEvidence,
+    attestor: args.signer.address,
     sourceHash: publishedEvidence ? sourceHash : null,
     detail: args.detail,
+    feed: args.feed,
     chargeable: false,
   };
 }
@@ -414,3 +472,8 @@ export const RATIO_BEARING_REASONS: readonly AssetRefusalReason[] = [
   "coverage_below_floor",
   "no_attributable_positions",
 ];
+
+/** Kept for callers that want an opaque request-scoped value. */
+export function randomHex32(): Hex {
+  return `0x${randomBytes(32).toString("hex")}`;
+}

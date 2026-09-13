@@ -7,16 +7,16 @@ import { createAttestorSigner } from "../src/eip712.js";
 import { DEFAULT_POLICY } from "../src/policy.js";
 import { canonicalHash, canonicalJson } from "../src/canonical.js";
 import { createUaid, base58Encode, canonicalAgentJson, agentIdHash } from "../src/hcs14.js";
-import { TEST_ATTESTOR_KEY } from "./helpers.js";
+import { TEST_ANCHOR_ORACLE, TEST_ATTESTOR_KEY, TEST_ORACLE, TEST_PAY_TO } from "./helpers.js";
 
-const signer = createAttestorSigner(TEST_ATTESTOR_KEY);
+const signer = createAttestorSigner(TEST_ATTESTOR_KEY, TEST_ORACLE);
 const source = new FixtureCoverageSource();
 
 describe("HCS anchoring stays inside one consensus message", () => {
   it("keeps every fixture verdict under 1024 bytes", async () => {
     for (const noteId of source.knownNotes()) {
       const verdict = await attest(noteId, { source, signer });
-      const record = buildAnchorRecord({
+      const record = buildAnchorRecord({ payTo: TEST_PAY_TO, oracle: TEST_ANCHOR_ORACLE,
         requestId: "0123456789abcdef",
         verdict,
         charge: verdict.decision === "attested" ? { transactionId: "0.0.7162784@1788800815.386309402" } : null,
@@ -33,7 +33,7 @@ describe("HCS anchoring stays inside one consensus message", () => {
 
   it("carries the full recomputable input set for an attestation", async () => {
     const verdict = await attest("NOTE-ALPHA", { source, signer });
-    const record = buildAnchorRecord({
+    const record = buildAnchorRecord({ payTo: TEST_PAY_TO, oracle: TEST_ANCHOR_ORACLE,
       requestId: "0123456789abcdef",
       verdict,
       charge: { transactionId: "0.0.7162784@1788800815.386309402" },
@@ -60,7 +60,7 @@ describe("HCS anchoring stays inside one consensus message", () => {
 
   it("records a refusal as an explicit non-charge", async () => {
     const verdict = await attest("NOTE-BRAVO", { source, signer });
-    const record = buildAnchorRecord({ requestId: "0123456789abcdef", verdict, charge: null });
+    const record = buildAnchorRecord({ payTo: TEST_PAY_TO, oracle: TEST_ANCHOR_ORACLE, requestId: "0123456789abcdef", verdict, charge: null });
 
     assert.equal(record.d, "refused");
     assert.equal(record.fam, "asset");
@@ -72,7 +72,7 @@ describe("HCS anchoring stays inside one consensus message", () => {
 
   it("omits every ratio-bearing key from an evidence refusal rather than zeroing it", async () => {
     const verdict = await attest("NOTE-INDIA", { source, signer });
-    const record = buildAnchorRecord({ requestId: "0123456789abcdef", verdict, charge: null });
+    const record = buildAnchorRecord({ payTo: TEST_PAY_TO, oracle: TEST_ANCHOR_ORACLE, requestId: "0123456789abcdef", verdict, charge: null });
     assert.equal(record.fam, "evidence");
     assert.equal(record.known, false);
 
@@ -91,7 +91,7 @@ describe("HCS anchoring stays inside one consensus message", () => {
     // declared_exceeds_real is an asset finding with no ratio. It keeps the
     // evidence, which is the finding, but must not publish a coverage figure.
     const verdict = await attest("NOTE-CHARLIE", { source, signer });
-    const record = buildAnchorRecord({ requestId: "0123456789abcdef", verdict, charge: null });
+    const record = buildAnchorRecord({ payTo: TEST_PAY_TO, oracle: TEST_ANCHOR_ORACLE, requestId: "0123456789abcdef", verdict, charge: null });
     assert.equal(record.fam, "asset");
     assert.equal(record.known, false);
     assert.equal("bps" in record, false, "no ratio was established, so none is published");
@@ -103,15 +103,16 @@ describe("HCS anchoring stays inside one consensus message", () => {
   it("still publishes the ratio when one was actually established", async () => {
     for (const noteId of ["NOTE-ALPHA", "NOTE-BRAVO", "NOTE-HOTEL"]) {
       const verdict = await attest(noteId, { source, signer });
-      const record = buildAnchorRecord({ requestId: "0123456789abcdef", verdict, charge: null });
+      const record = buildAnchorRecord({ payTo: TEST_PAY_TO, oracle: TEST_ANCHOR_ORACLE, requestId: "0123456789abcdef", verdict, charge: null });
       assert.equal(typeof record.bps, "number", `${noteId} established a ratio and must publish it`);
-      assert.equal(record.floor, DEFAULT_POLICY.floorBps);
+      assert.equal(record.floor, 10000, "the note's own load line, as its source read it");
     }
   });
 
   it("degrades to a digest rather than chunking when a note has too many legs", async () => {
     const many: FixtureNote = {
       noteId: "NOTE-MANY",
+      thresholdBps: 10000,
       holder: "0x00000000000000000000000000000000006f1a55",
       nominatedVaults: [],
       notesOutstanding: "100000",
@@ -138,7 +139,7 @@ describe("HCS anchoring stays inside one consensus message", () => {
       source: new FixtureCoverageSource({}, [many]),
       signer,
     });
-    const record = buildAnchorRecord({
+    const record = buildAnchorRecord({ payTo: TEST_PAY_TO, oracle: TEST_ANCHOR_ORACLE,
       requestId: "0123456789abcdef",
       verdict,
       charge: null,

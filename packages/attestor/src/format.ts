@@ -14,11 +14,11 @@
  * Kept free of imports so the verifier can depend on it without loading the
  * Hedera SDK that anchoring needs.
  */
-export const CURRENT_FORMAT = 2 as const;
+export const CURRENT_FORMAT = 3 as const;
 
-export type FormatVersion = 1 | 2;
+export type FormatVersion = 1 | 2 | 3;
 
-export const KNOWN_FORMATS: readonly FormatVersion[] = [1, 2];
+export const KNOWN_FORMATS: readonly FormatVersion[] = [1, 2, 3];
 
 /**
  * Keys the v1 encoder wrote on every record, whether or not it knew them. A

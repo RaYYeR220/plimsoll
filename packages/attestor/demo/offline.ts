@@ -2,6 +2,7 @@ import { rmSync } from "node:fs";
 import { attest } from "../src/attest.js";
 import { buildAnchorRecord, byteLength, HCS_MESSAGE_LIMIT } from "../src/anchor.js";
 import { FixtureCoverageSource, UnknownNote } from "../src/coverage/index.js";
+import { resolveOracle } from "../src/config.js";
 import { createAttestorSigner } from "../src/eip712.js";
 import { DEFAULT_POLICY } from "../src/policy.js";
 import { ReceiptStore } from "../src/receipts.js";
@@ -22,15 +23,22 @@ import { checkReceipt } from "../src/verify.js";
 const DEMO_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" as const;
 
 const DEMO_DATA_DIR = "data/demo";
+const DEMO_PAY_TO = "0.0.0";
 
 async function main(): Promise<void> {
   rmSync(DEMO_DATA_DIR, { recursive: true, force: true });
   const source = new FixtureCoverageSource();
-  const signer = createAttestorSigner(DEMO_KEY);
+  // No network, but not an invented domain either: the oracle comes from the
+  // deployment record, so these signatures are the shape the chain accepts.
+  const oracle = resolveOracle({});
+  const signer = createAttestorSigner(DEMO_KEY, {
+    chainId: oracle.chainId,
+    verifyingContract: oracle.address as `0x${string}`,
+  });
   const receipts = new ReceiptStore(DEMO_DATA_DIR);
 
   console.log(`\nPlimsoll coverage attestor — offline demo`);
-  console.log(`policy ${DEFAULT_POLICY.id}, load line ${DEFAULT_POLICY.floorBps} bps`);
+  console.log(`policy ${DEFAULT_POLICY.id}; each note is measured against its own load line`);
   console.log(`attestor ${signer.address}\n`);
 
   const header = ["note", "outcome", "family", "reason", "bps", "charge", "anchor"];
@@ -56,6 +64,8 @@ async function main(): Promise<void> {
       verdict,
       charge,
       maxPositions: DEFAULT_POLICY.maxAnchoredPositions,
+      payTo: DEMO_PAY_TO,
+      oracle,
     });
     const size = byteLength(record);
 
@@ -86,10 +96,11 @@ async function main(): Promise<void> {
       ),
       signature: verdict.signature,
       attestor: verdict.attestor,
+      feed: verdict.feed,
       sourceHash: verdict.sourceHash,
       evidence: verdict.evidence,
       chargeTransactionId: charge?.transactionId ?? null,
-      payTo: "0.0.0",
+      payTo: DEMO_PAY_TO,
       amountTinybar: "100000",
       payer: null,
       requestedAt: Math.floor(Date.now() / 1000),

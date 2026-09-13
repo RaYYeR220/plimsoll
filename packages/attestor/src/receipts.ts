@@ -24,6 +24,8 @@ export interface StoredReceipt {
   message: Record<string, unknown>;
   signature: string;
   attestor: string;
+  /** Source that produced the readings; `fixture` is simulated, not measured. */
+  feed?: string;
   sourceHash: string | null;
   evidence: Evidence | null;
   /** Settlement id when a charge happened; null is the claim that none did. */

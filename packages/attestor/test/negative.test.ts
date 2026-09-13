@@ -3,13 +3,13 @@ import { randomBytes } from "node:crypto";
 import { rmSync } from "node:fs";
 import { after, describe, it } from "node:test";
 import { privateKeyToAccount } from "viem/accounts";
-import { attest } from "../src/attest.js";
+import { ClockNonces, attest } from "../src/attest.js";
 import { buildAnchorRecord } from "../src/anchor.js";
 import { FixtureCoverageSource } from "../src/coverage/index.js";
 import {
-  ATTESTOR_DOMAIN,
   ATTESTATION_TYPES,
   attestationToWire,
+  attestorDomain,
   createAttestorSigner,
   recoverRefusalSigner,
   refusalToWire,
@@ -22,7 +22,7 @@ import {
   checkReceipt,
   verifyAttestation,
 } from "../src/verify.js";
-import { TEST_ATTESTOR_KEY } from "./helpers.js";
+import { TEST_ANCHOR_ORACLE, TEST_ATTESTOR_KEY, TEST_ORACLE, TEST_PAY_TO } from "./helpers.js";
 
 /**
  * Negative controls.
@@ -32,7 +32,7 @@ import { TEST_ATTESTOR_KEY } from "./helpers.js";
  * the passing ones their meaning.
  */
 
-const signer = createAttestorSigner(TEST_ATTESTOR_KEY);
+const signer = createAttestorSigner(TEST_ATTESTOR_KEY, TEST_ORACLE);
 const source = new FixtureCoverageSource();
 const DATA_DIR = `data/test/${randomBytes(4).toString("hex")}`;
 
@@ -77,7 +77,7 @@ describe("a forged signature must fail", () => {
       "0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba",
     );
     const forged = await impostor.signTypedData({
-      domain: ATTESTOR_DOMAIN,
+      domain: attestorDomain(TEST_ORACLE),
       types: ATTESTATION_TYPES,
       primaryType: "Attestation",
       message: verdict.message,
@@ -88,6 +88,7 @@ describe("a forged signature must fail", () => {
       message: attestationToWire(verdict.message as never),
       signature: forged,
       expectedAttestor: signer.address,
+      oracle: TEST_ORACLE,
     });
     assert.equal(result.valid, false, "a forged signature MUST NOT verify");
     assert.match(result.reasons.join(" "), /recovers to/);
@@ -115,6 +116,7 @@ describe("a forged signature must fail", () => {
       message: attestationToWire(verdict.message as never),
       signature: mangled,
       expectedAttestor: signer.address,
+      oracle: TEST_ORACLE,
     });
     assert.equal(result.valid, false);
   });
@@ -146,7 +148,7 @@ describe("a tampered HCS record must fail", () => {
   it("detects a record whose ratio was rewritten", async () => {
     const verdict = await attest("NOTE-ALPHA", { source, signer });
     const receipt = toReceipt(verdict);
-    const record = buildAnchorRecord({ requestId: receipt.requestId, verdict, charge: null });
+    const record = buildAnchorRecord({ payTo: TEST_PAY_TO, oracle: TEST_ANCHOR_ORACLE, requestId: receipt.requestId, verdict, charge: null });
 
     record.bps = 20000;
     const checks = checkAnchorBinding(record, receipt);
@@ -157,7 +159,7 @@ describe("a tampered HCS record must fail", () => {
   it("detects a record that claims a charge the receipt does not", async () => {
     const verdict = await attest("NOTE-ALPHA", { source, signer });
     const receipt = toReceipt(verdict);
-    const record = buildAnchorRecord({ requestId: receipt.requestId, verdict, charge: null });
+    const record = buildAnchorRecord({ payTo: TEST_PAY_TO, oracle: TEST_ANCHOR_ORACLE, requestId: receipt.requestId, verdict, charge: null });
 
     record.chg = true;
     record.tx = "0.0.7162784@1788800815.386309402";
@@ -170,7 +172,7 @@ describe("a tampered HCS record must fail", () => {
     const alpha = await attest("NOTE-ALPHA", { source, signer });
     const juliet = await attest("NOTE-JULIET", { source, signer });
     const receipt = toReceipt(alpha);
-    const record = buildAnchorRecord({ requestId: receipt.requestId, verdict: alpha, charge: null });
+    const record = buildAnchorRecord({ payTo: TEST_PAY_TO, oracle: TEST_ANCHOR_ORACLE, requestId: receipt.requestId, verdict: alpha, charge: null });
 
     record.sig = juliet.signature;
     const checks = checkAnchorBinding(record, receipt);
@@ -185,7 +187,7 @@ describe("a phantom coverage figure must fail", () => {
     assert.equal(verdict.decision, "refused");
     assert.equal(verdict.family, "evidence");
 
-    const record = buildAnchorRecord({ requestId: "deadbeefdeadbeef", verdict, charge: null });
+    const record = buildAnchorRecord({ payTo: TEST_PAY_TO, oracle: TEST_ANCHOR_ORACLE, requestId: "deadbeefdeadbeef", verdict, charge: null });
     assert.equal(checkNoPhantomRatio(record).passed, true, "a correct record must pass");
 
     // Re-introduce the defect exactly as it shipped: a zero, not a wrong number.
@@ -208,7 +210,7 @@ describe("a phantom coverage figure must fail", () => {
       ["vsh", ""],
       ["srch", `0x${"00".repeat(32)}`],
     ] as const) {
-      const record = buildAnchorRecord({ requestId: "deadbeefdeadbeef", verdict, charge: null });
+      const record = buildAnchorRecord({ payTo: TEST_PAY_TO, oracle: TEST_ANCHOR_ORACLE, requestId: "deadbeefdeadbeef", verdict, charge: null });
       (record as unknown as Record<string, unknown>)[key] = value;
       assert.equal(
         checkNoPhantomRatio(record).passed,
@@ -220,7 +222,7 @@ describe("a phantom coverage figure must fail", () => {
 
   it("rejects a ratio smuggled into an asset finding that established none", async () => {
     const verdict = await attest("NOTE-CHARLIE", { source, signer });
-    const record = buildAnchorRecord({ requestId: "deadbeefdeadbeef", verdict, charge: null });
+    const record = buildAnchorRecord({ payTo: TEST_PAY_TO, oracle: TEST_ANCHOR_ORACLE, requestId: "deadbeefdeadbeef", verdict, charge: null });
     assert.equal(checkNoPhantomRatio(record).passed, true);
 
     (record as unknown as Record<string, unknown>).bps = 13125;
@@ -238,11 +240,13 @@ describe("a phantom coverage figure must fail", () => {
     // Take the genuine signature and try to present it as an asset refusal that
     // reports zero coverage. The primary type is hashed into the digest, so the
     // forgery recovers to a different address.
+    // Every field is well-formed for an AssetRefusal, so recovery genuinely
+    // runs: the point is that it returns somebody else, not that it throws.
     const forged = {
-      noteId: verdict.noteId,
+      noteId: verdict.noteIdHash,
       reason: verdict.reason,
       coverageKnown: false,
-      coverageBps: 0,
+      coverageBps: 0n,
       asOfBlock: 0n,
       vaultSetHash: `0x${"00".repeat(32)}`,
       sourceHash: `0x${"00".repeat(32)}`,
@@ -250,7 +254,11 @@ describe("a phantom coverage figure must fail", () => {
       nonce: verdict.message.nonce,
     } as const;
 
-    const recovered = await recoverRefusalSigner(forged as never, verdict.signature);
+    const recovered = await recoverRefusalSigner(
+      attestorDomain(TEST_ORACLE),
+      forged as never,
+      verdict.signature,
+    );
     assert.notEqual(
       recovered.toLowerCase(),
       signer.address.toLowerCase(),
@@ -271,25 +279,33 @@ describe("a replayed nonce must fail", () => {
     const verdict = await attest("NOTE-ALPHA", { source, signer });
     assert.equal(verdict.decision, "attested");
 
-    const seen = new Set<string>([verdict.message.nonce]);
+    const seen = new Set<string>([String(verdict.message.nonce)]);
     const result = await verifyAttestation({
       message: attestationToWire(verdict.message as never),
       signature: verdict.signature,
       expectedAttestor: signer.address,
+      oracle: TEST_ORACLE,
       seenNonces: seen,
     });
     assert.equal(result.valid, false, "a replayed attestation MUST NOT verify");
     assert.match(result.reasons.join(" "), /already been used/);
   });
 
-  it("issues a distinct nonce for every verdict", async () => {
-    const nonces = new Set<string>();
+  it("issues a strictly increasing nonce for every verdict on a note", async () => {
+    // The oracle rejects any nonce at or below the one it already holds for a
+    // note, so uniqueness is not enough: they have to increase. Twenty-five
+    // verdicts land inside the same wall-clock second, which is exactly the case
+    // a per-request nonce source gets wrong.
+    const nonces = new ClockNonces();
+    const issued: bigint[] = [];
     for (let i = 0; i < 25; i++) {
-      const verdict = await attest("NOTE-ALPHA", { source, signer });
-      assert.equal(nonces.has(verdict.message.nonce), false, "nonces must never repeat");
-      nonces.add(verdict.message.nonce);
+      const verdict = await attest("NOTE-ALPHA", { source, signer, nonces });
+      issued.push(verdict.message.nonce);
     }
-    assert.equal(nonces.size, 25);
+    for (let i = 1; i < issued.length; i++) {
+      assert.ok(issued[i]! > issued[i - 1]!, `nonce ${i} did not increase: ${issued[i - 1]} then ${issued[i]}`);
+    }
+    assert.equal(new Set(issued.map(String)).size, 25);
   });
 });
 
@@ -302,6 +318,7 @@ describe("an expired attestation must fail", () => {
       message: attestationToWire(verdict.message as never),
       signature: verdict.signature,
       expectedAttestor: signer.address,
+      oracle: TEST_ORACLE,
       now: expiry - 1,
     });
     assert.equal(stillFresh.valid, true, "it must be valid right up to its expiry");
@@ -310,6 +327,7 @@ describe("an expired attestation must fail", () => {
       message: attestationToWire(verdict.message as never),
       signature: verdict.signature,
       expectedAttestor: signer.address,
+      oracle: TEST_ORACLE,
       now: expiry + 1,
     });
     assert.equal(expired.valid, false, "an expired attestation MUST NOT verify");
@@ -331,6 +349,7 @@ describe("declared greater than real must fail", () => {
     const inflated = new FixtureCoverageSource({}, [
       {
         noteId: "NOTE-INFLATED",
+        thresholdBps: 10000,
         holder: "0x00000000000000000000000000000000006f1a55",
         nominatedVaults: ["0x4626aa11c0ffee0000000000000000000000a001"],
         notesOutstanding: "80000",

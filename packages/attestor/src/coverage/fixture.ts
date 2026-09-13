@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { canonicalHash } from "../canonical.js";
 import {
   type CoverageSnapshot,
   type CoverageSource,
@@ -11,12 +12,25 @@ import {
   VaultSetDrift,
   VaultUnresolved,
 } from "./types.js";
+import { LiabilityUnresolved } from "./live-errors.js";
 
 const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 
 /** Fixture file shape. Amounts are decimal strings so they survive JSON exactly. */
 export interface FixtureNote {
   noteId: string;
+  /**
+   * The vault-set hash the note is registered with on the oracle. Older
+   * taxonomy fixtures predate the field and fall back to the hash of their own
+   * nominated set, which is what the registry would hold for them.
+   */
+  registeredVaultSetHash?: string;
+  /**
+   * The note's load line in basis points, standing in for `LoadLine.lineOf`.
+   * A fixture without one models a note whose line could not be read, which is
+   * an evidence refusal — never a fallback to a configured default.
+   */
+  thresholdBps?: number;
   holder: string;
   nominatedVaults: string[];
   notesOutstanding: string;
@@ -52,7 +66,9 @@ export interface FixtureSourceOptions {
  * This is what runs in the offline demo and in every test. It is not a
  * simplification of the live source: it implements the same contract, including
  * every failure mode, which is why the refusal paths can be exercised without a
- * chain. See MOCKS.md for what it does and does not stand in for.
+ * chain. Its id is `fixture`, and that id is written into every anchored record
+ * it produces, so a reading it invented can never be mistaken for a live one.
+ * See MOCKS.md.
  */
 export class FixtureCoverageSource implements CoverageSource {
   readonly id = "fixture";
@@ -86,6 +102,14 @@ export class FixtureCoverageSource implements CoverageSource {
       });
     }
 
+    if (note.thresholdBps === undefined) {
+      // The denominator side is never defaulted. Without a line there is nothing
+      // to measure against, and inventing one would decide a charge.
+      throw new LiabilityUnresolved(`${note.noteId}: no load line could be read`, {
+        market: note.noteId,
+      });
+    }
+
     const nominated = [...note.nominatedVaults].map(lower).sort();
     const observed = note.positions.map((p) => lower(p.vault)).sort();
     if (!sameSet(nominated, observed)) throw new VaultSetDrift(nominated, observed);
@@ -114,6 +138,8 @@ export class FixtureCoverageSource implements CoverageSource {
 
     return {
       noteId: note.noteId,
+      registeredVaultSetHash: note.registeredVaultSetHash ?? canonicalHash(nominated),
+      thresholdBps: note.thresholdBps,
       holder: lower(note.holder),
       nominatedVaults: nominated,
       // Sorted so the vault-set hash never depends on fixture file ordering.

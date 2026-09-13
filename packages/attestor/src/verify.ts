@@ -3,14 +3,22 @@ import type { AnchorRecord } from "./anchor.js";
 import { canonicalHash } from "./canonical.js";
 import {
   attestationFromWire,
-  isLegacyRefusalWire,
-  legacyRefusalFromWire,
+  attestorDomain,
   recoverAttestationSigner,
-  recoverLegacyRefusalSigner,
   recoverRefusalSigner,
   refusalFromWire,
+  type OracleDomain,
 } from "./eip712.js";
 import { CURRENT_FORMAT, KNOWN_FORMATS, V1_ALWAYS_PRESENT, type FormatVersion } from "./format.js";
+import {
+  isV1RefusalWire,
+  recoverRetiredAttestationSigner,
+  recoverV1RefusalSigner,
+  recoverV2RefusalSigner,
+  retiredAttestationFromWire,
+  v1RefusalFromWire,
+  v2RefusalFromWire,
+} from "./legacy.js";
 import { familyOf, type RefusalReason } from "./reasons.js";
 import { RATIO_BEARING_REASONS } from "./attest.js";
 import type { StoredReceipt } from "./receipts.js";
@@ -22,9 +30,10 @@ import type { StoredReceipt } from "./receipts.js";
  * service. Every function takes the artifacts a stranger can obtain — a receipt,
  * an anchored record, a mirror-node response — and returns a checkable result.
  *
- * Records are verified under the rules of the format they declare. A v1 record
- * is not rejected for being v1; it is held to what v1 promised, and a record
- * whose declared version and actual encoding disagree fails.
+ * Records are verified under the rules of the format they declare. A record in
+ * a retired format is not rejected for being old; it is held to what that
+ * format promised, and a record whose declared version and actual encoding
+ * disagree fails.
  */
 
 export interface Check {
@@ -39,13 +48,7 @@ export interface Check {
   note?: boolean;
 }
 
-export function check(
-  id: string,
-  label: string,
-  passed: boolean,
-  detail: string,
-  note = false,
-): Check {
+export function check(id: string, label: string, passed: boolean, detail: string, note = false): Check {
   return note ? { id, label, passed, detail, note: true } : { id, label, passed, detail };
 }
 
@@ -78,6 +81,12 @@ export function recomputeCoverageBps(args: {
   return { attributableValue, obligation, bps: Number(bps) };
 }
 
+/** The oracle a v3 signature is bound to, rebuilt from the record itself. */
+export function oracleFromRecord(record: AnchorRecord | null | undefined): OracleDomain | null {
+  if (!record?.orc || typeof record.cid !== "number") return null;
+  return { chainId: record.cid, verifyingContract: record.orc as `0x${string}` };
+}
+
 /**
  * Verify a stored receipt's own internal consistency, under the rules of the
  * format its record declares.
@@ -85,6 +94,7 @@ export function recomputeCoverageBps(args: {
 export async function checkReceipt(
   receipt: StoredReceipt,
   version: FormatVersion = CURRENT_FORMAT,
+  oracle: OracleDomain | null = oracleFromRecord(receipt.anchorRecord),
 ): Promise<Check[]> {
   const checks: Check[] = [];
 
@@ -111,7 +121,7 @@ export async function checkReceipt(
     );
   }
 
-  checks.push(await checkSignature(receipt, version));
+  checks.push(await checkSignature(receipt, version, oracle));
   checks.push(checkFamilyInvariant(receipt, version));
   return checks;
 }
@@ -119,42 +129,58 @@ export async function checkReceipt(
 /**
  * The signed payload type is selected by the declared format, never guessed.
  *
- * v1 signed every refusal as the single `Refusal` struct; v2 signs
- * `AssetRefusal` or `EvidenceRefusal`. A payload in the other format's shape is
- * not an alternative encoding to be tolerated — it means the record's label
- * does not describe what was signed — so it fails before recovery is attempted.
- * Attestations are the same struct in both formats.
+ * v1 signed every refusal as one `Refusal` struct; v2 split it in two; both
+ * signed under a domain of this service's own invention. v3 signs the struct
+ * `CoverageOracle` actually recovers, under a domain bound to that oracle, so
+ * its signatures are the ones the chain can accept. A payload in another
+ * format's shape means the record's label does not describe what was signed,
+ * and fails before recovery is attempted.
  */
-async function checkSignature(receipt: StoredReceipt, version: FormatVersion): Promise<Check> {
+async function checkSignature(
+  receipt: StoredReceipt,
+  version: FormatVersion,
+  oracle: OracleDomain | null,
+): Promise<Check> {
   const label = "EIP-712 signature recovers to the declared attestor";
   const signature = receipt.signature as Hex;
   try {
     let recovered: string;
-    if (receipt.decision === "attested") {
-      recovered = await recoverAttestationSigner(attestationFromWire(receipt.message), signature);
+    if (version === 3) {
+      if (!oracle) {
+        return check(
+          "signature",
+          label,
+          false,
+          "the record names no oracle, so the domain a v3 signature is bound to cannot be rebuilt",
+        );
+      }
+      if (receipt.decision !== "attested" && isV1RefusalWire(receipt.message)) {
+        return check("signature", label, false, "a v3 record carrying the retired v1 refusal payload");
+      }
+      const domain = attestorDomain(oracle);
+      recovered =
+        receipt.decision === "attested"
+          ? await recoverAttestationSigner(domain, attestationFromWire(receipt.message), signature)
+          : await recoverRefusalSigner(domain, refusalFromWire(receipt.message), signature);
+    } else if (receipt.decision === "attested") {
+      recovered = await recoverRetiredAttestationSigner(retiredAttestationFromWire(receipt.message), signature);
     } else {
-      const legacyShape = isLegacyRefusalWire(receipt.message);
+      const legacyShape = isV1RefusalWire(receipt.message);
       if (version === 1 && !legacyShape) {
         return check(
           "signature",
           label,
           false,
-          "the record declares format v1, but this refusal is signed over a v2 type " +
-            "(AssetRefusal or EvidenceRefusal); v1 signed refusals as the single Refusal struct",
+          "the record declares format v1, but this refusal is signed over a later type; " +
+            "v1 signed refusals as the single Refusal struct",
         );
       }
-      if (version !== 1 && legacyShape) {
-        return check(
-          "signature",
-          label,
-          false,
-          `the record declares format v${version}, but this refusal is signed over the ` +
-            "retired v1 Refusal struct",
-        );
+      if (version === 2 && legacyShape) {
+        return check("signature", label, false, "the record declares format v2, but this refusal is signed over the retired v1 struct");
       }
       recovered = legacyShape
-        ? await recoverLegacyRefusalSigner(legacyRefusalFromWire(receipt.message), signature)
-        : await recoverRefusalSigner(refusalFromWire(receipt.message), signature);
+        ? await recoverV1RefusalSigner(v1RefusalFromWire(receipt.message), signature)
+        : await recoverV2RefusalSigner(v2RefusalFromWire(receipt.message), signature);
     }
     const matches = recovered.toLowerCase() === receipt.attestor.toLowerCase();
     return check(
@@ -197,23 +223,21 @@ export function checkFamilyInvariant(
   if (family === "evidence") {
     if (version === 1) {
       // v1 had no way to say "absent": it wrote a zero and set
-      // coverageKnown=false. That is the defect v2 exists to fix, but it is the
-      // rule this record was written under, so it is the rule applied here —
-      // with the zero called out rather than passed silently.
+      // coverageKnown=false. That is the defect later formats exist to fix, but
+      // it is the rule this record was written under, so it is the rule applied
+      // here, with the zero called out rather than passed silently.
       const ok = receipt.coverageKnown === false && receipt.coverageBps === 0;
       return check(
         "family",
         "evidence refusal states no ratio",
         ok,
         ok
-          ? "format v1: coverageBps is zeroed and coverageKnown=false marks it meaningless; " +
-              "it is not a coverage reading"
+          ? "format v1: coverageBps is zeroed and coverageKnown=false marks it meaningless; it is not a coverage reading"
           : `format v1 zeroed the figure on an evidence refusal, but this receipt has ` +
               `coverageKnown=${receipt.coverageKnown} and coverageBps=${JSON.stringify(receipt.coverageBps)}`,
         ok,
       );
     }
-    // null, not zero: under v2 an evidence refusal establishes no ratio at all.
     const ok = receipt.coverageKnown === false && receipt.coverageBps === null;
     return check(
       "family",
@@ -243,10 +267,10 @@ export function checkFamilyInvariant(
 /**
  * The ratio we assert, as opposed to the readings a reader may divide.
  *
- * The distinction matters. `val` and `obl` are measured quantities: on an asset
- * finding they are the finding, and a reader who divides them gets a true
- * number about a real position. `bps` and `floor` are our verdict, and
- * publishing them where no verdict was reached is the fabrication.
+ * `val` and `obl` are measured quantities: on an asset finding they are the
+ * finding, and a reader who divides them gets a true number about a real
+ * position. `bps` and `floor` are our verdict, and publishing them where no
+ * verdict was reached is the fabrication.
  */
 const ASSERTED_RATIO_KEYS = ["bps", "floor"] as const;
 
@@ -266,8 +290,52 @@ const EVIDENCE_FORBIDDEN_KEYS = [
   "pos",
 ] as const;
 
+/** Keys v3 added, which a record in that format must carry. */
+const V3_REQUIRED_KEYS = ["nid", "orc", "cid", "feed"] as const;
+
 /**
- * The v2 rule: no figure is published where none was established.
+ * Feed ids whose readings are invented rather than measured.
+ *
+ * A record produced from fixtures is a demonstration of the mechanism, not a
+ * statement about anybody's balance sheet. It is still a true record — the
+ * signature, the arithmetic and the charge all check out — which is precisely
+ * why it has to be labelled: everything about it looks like a live reading.
+ */
+export const SIMULATED_FEEDS: readonly string[] = ["fixture"];
+
+/**
+ * Say plainly where the numbers came from.
+ *
+ * This passes either way: simulated inputs do not make a charge unwarranted,
+ * and refusing them here would just mean the demo reports a false discrepancy.
+ * What it must never do is stay quiet, so a fixture-derived record is flagged
+ * as a note and the wording leaves no room to read it as a measurement.
+ */
+export function checkProvenance(record: AnchorRecord): Check {
+  const feed = record.feed;
+  if (feed === undefined) {
+    return check(
+      "provenance",
+      "the record says where its readings came from",
+      false,
+      "the record names no source, so there is no way to tell a measurement from a simulation",
+    );
+  }
+  const simulated = SIMULATED_FEEDS.includes(feed);
+  return check(
+    "provenance",
+    "the record says where its readings came from",
+    true,
+    simulated
+      ? `feed "${feed}": these figures come from checked-in fixtures, not from a chain. ` +
+        `The mechanism is real and this record is genuine; the coverage it reports is not a measurement of anything`
+      : `feed "${feed}": read from a chain`,
+    simulated,
+  );
+}
+
+/**
+ * No figure is published where none was established.
  *
  * This is the negative control for the defect in the first encoding: an
  * evidence refusal carrying `"bps": 0` is not "no ratio", it is a claim of zero
@@ -303,15 +371,32 @@ export function checkNoPhantomRatio(record: AnchorRecord): Check {
 /**
  * Hold a record to the encoding its declared version promises.
  *
- * v2 forbids figures that were not established. v1 always wrote the full
- * numeric block, so a v1-labelled record missing any of it was written by the
- * v2 encoder under the wrong label and fails; one carrying a zeroed block on a
- * refusal with no ratio passes, because that is what v1 meant by "unknown",
- * and is flagged so nobody mistakes the zero for a reading.
+ * v3 forbids figures that were not established and requires the fields that
+ * make it self-verifying: the note id the oracle knows, and the oracle and
+ * chain its signature is bound to. v1 always wrote the full numeric block, so a
+ * v1-labelled record missing any of it was written by a later encoder under the
+ * wrong label and fails; one carrying a zeroed block on a refusal with no ratio
+ * passes, because that is what v1 meant by "unknown", and is flagged so nobody
+ * mistakes the zero for a reading.
  */
 export function checkEncoding(record: AnchorRecord): Check {
   const asRecord = record as unknown as Record<string, unknown>;
   const version = asRecord.v;
+
+  if (version === 3) {
+    const missing = V3_REQUIRED_KEYS.filter((key) => !(key in asRecord));
+    if (missing.length > 0) {
+      return check(
+        "encoding-v3",
+        "record matches the v3 encoding it declares",
+        false,
+        `declares format v3 but omits ${missing.join(", ")}, without which its signature cannot be checked, ` +
+          `or its readings traced to a source, from the record alone`,
+      );
+    }
+    const rule = checkNoPhantomRatio(record);
+    return { ...rule, detail: `format v3: ${rule.detail}` };
+  }
 
   if (version === 2) {
     const rule = checkNoPhantomRatio(record);
@@ -327,7 +412,7 @@ export function checkEncoding(record: AnchorRecord): Check {
         label,
         false,
         `declares format v1 but omits ${missing.join(", ")}, which the v1 encoder wrote on every ` +
-          "record; this is the v2 encoding under a v1 label",
+          "record; this is a later encoding under a v1 label",
       );
     }
     const zeroedUnknown = record.d === "refused" && record.known === false;
@@ -394,6 +479,7 @@ export async function verifyAttestation(args: {
   message: Record<string, unknown>;
   signature: string;
   expectedAttestor: string;
+  oracle: OracleDomain;
   now?: number;
   seenNonces?: Set<string>;
 }): Promise<AttestationValidity> {
@@ -402,7 +488,7 @@ export async function verifyAttestation(args: {
   const now = args.now ?? Math.floor(Date.now() / 1000);
 
   try {
-    const recovered = await recoverAttestationSigner(message, args.signature as Hex);
+    const recovered = await recoverAttestationSigner(attestorDomain(args.oracle), message, args.signature as Hex);
     if (recovered.toLowerCase() !== args.expectedAttestor.toLowerCase()) {
       reasons.push(`signature recovers to ${recovered}, not ${args.expectedAttestor}`);
     }
@@ -413,7 +499,7 @@ export async function verifyAttestation(args: {
   if (message.expiry <= BigInt(now)) {
     reasons.push(`expired at ${message.expiry} (now ${now})`);
   }
-  if (args.seenNonces?.has(message.nonce)) {
+  if (args.seenNonces?.has(message.nonce.toString())) {
     reasons.push(`nonce ${message.nonce} has already been used`);
   }
 

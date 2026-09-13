@@ -8,6 +8,7 @@
   "notesOutstanding": "250000",
   "parPerNote": "1000000",
   "unitDecimals": 6,
+  "thresholdBps": 10000,
   "asOfBlock": "21480315",
   "observedAt": -45,
   "sourceSet": {
