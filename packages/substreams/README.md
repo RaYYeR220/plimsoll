@@ -517,6 +517,17 @@ v0.1.2. Run it before every publish.
 - **`state_price` is `totalAssets / totalSupply`**, not `convertToAssets`. The
   difference is the virtual offset (`+1` / `+10^offset`), which is below 1e-12
   relative on any vault of size, as the cross-check shows.
+- **A vault can be fully functional and still report itself closed.** Morpho
+  Vault V2 does not implement the ERC-4626 limit functions: `maxDeposit`,
+  `maxMint`, `maxWithdraw` and `maxRedeem` all return 0 for every address,
+  including its largest holder, with all four gates unset, while deposits and
+  redemptions work normally. Any conformant integrator reads that as a closed
+  vault. This package records the answer rather than judging it, so
+  `VaultBlock.max_deposit` and the Messari `depositLimit` are 0 for such a
+  vault: that is the vault speaking, not a failed call. Anyone selecting
+  vaults from ERC-4626 events will meet this, and we hit it ourselves, since
+  the V2 vault that the positions proof ran against was later rejected as
+  backing for exactly this reason.
 - **Vault-specific semantics are not modelled.** sUSDe emits `Withdraw` when a
   cooldown starts, and its `totalAssets` excludes rewards still vesting. Queued
   exits and rebasing receipts show up as `rates_consistent = false`, not as a

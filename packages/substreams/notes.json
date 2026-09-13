@@ -1,15 +1,17 @@
 {
   "version": 2,
-  "about": "Plimsoll note definitions, read by packages/mcp and packages/attestor. The file holds only what the chain cannot say: the network holding the backing, the vault list (the preimage of the vaultSetHash registered in CoverageOracle), whether the note is a negative control, and where the on-chain facts live. Everything else is read from the chain at the time of use and is never configured here: outstanding (the note's totalSupply), par (its nominalValue), the threshold (LoadLine) and the holder (the note's issuer, the sole ROLE_ISSUER member). Keys are noteId = keccak256(market). Run scripts/check_notes.py after every edit.",
+  "about": "Plimsoll note definitions, read by packages/mcp and packages/attestor. The file holds only what the chain cannot say: the network holding the backing, the vault list (the preimage of the vaultSetHash registered in CoverageOracle), whether the note is a negative control, and where the on-chain facts live. Everything else is read from the chain at the time of use and is never configured here: outstanding (the note's totalSupply), par (its nominalValue), the threshold (LoadLine) and the holder (the note's issuer, the sole ROLE_ISSUER member). Keys are noteId = keccak256(market). Vault lists are lowercase and sorted, because canonicalHash hashes them in that order. Run scripts/check_notes.py after every edit.",
   "notes": {
     "0x376011be372685b3e6d566a7ba172f8b8968ac7a6d56d23e67046e2fd24d253c": {
       "market": "PLIM-A",
       "network": "base",
       "chainId": 8453,
-      "vaults": [],
+      "vaults": [
+        "0xf42f5795d9ac7e9d757db633d693cd548cfd9169"
+      ],
       "negativeControl": true,
-      "status": "placeholder",
-      "comment": "The negative control. Its real on-chain obligation is 10,000 notes at a nominal of 100.00, so $1,000,000 against roughly $15 of backing, and it must always refuse. Its registered vaultSetHash 0x2627c1d5... is sha256('plimsoll/vaults/v1'), a bootstrap placeholder, not the hash of any vault list; setVaultSet replaces it once the vaults are final.",
+      "status": "final",
+      "comment": "The negative control, backed by Fluid fUSDC alone. Its real on-chain obligation is 10,000 notes at a nominal of 100.00, so $1,000,000 against a position worth a few dollars, and it must always refuse. Its vault set is disjoint from PLIM-B's, so no collateral is pledged twice.",
       "registry": {
         "chain": "hedera-testnet",
         "chainId": 296,
@@ -24,10 +26,14 @@
       "market": "PLIM-B",
       "network": "base",
       "chainId": 8453,
-      "vaults": [],
+      "vaults": [
+        "0x3128a0f7f0ea68e7b7c9b00afa7e41045828e858",
+        "0xc768c589647798a6ee01a91fde98ef2ed046dbd6",
+        "0xee8f4ec5672f09119b96ab6fb59c27e1b7e44b61"
+      ],
       "negativeControl": false,
-      "status": "placeholder",
-      "comment": "The right-sized series: a $10.00 on-chain obligation (1,000 base units at 2 decimals, nominal 100 at 2 decimals) against roughly $15 of Base backing, so it is the note that should clear. ISIN US0000PLIMB4, Hedera 0.0.10482316.",
+      "status": "final",
+      "comment": "The right-sized series: a $10.00 on-chain obligation (1,000 base units at 2 decimals, nominal 100 at 2 decimals) against real Base backing spread over Morpho Gauntlet USDC Prime, Aave waBasUSDC and Spark sUSDC. ISIN US0000PLIMB4, Hedera 0.0.10482316.",
       "registry": {
         "chain": "hedera-testnet",
         "chainId": 296,
