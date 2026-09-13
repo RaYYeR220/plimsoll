@@ -2,6 +2,8 @@
 
 Everything below is public. No keys, no wallet, no account, nothing to install except Node.
 
+**[Demo video, 2:48](https://youtu.be/2w4pFaKTntE)** · **[Live site](https://plimsoll-tau.vercel.app)**
+
 ## 1. One command (about a minute, most of it the first build)
 
 ```bash

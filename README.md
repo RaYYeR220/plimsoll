@@ -2,6 +2,8 @@
 
 **A market for tokenised notes whose backing is checked, not asserted.**
 
+**[Demo video, 2:48](https://youtu.be/2w4pFaKTntE)** · **[Live site](https://plimsoll-tau.vercel.app)** · [Five-minute review path](JUDGES.md)
+
 A Plimsoll line is the mark on a ship's hull showing how deep she may be loaded. It was made
 compulsory in law in 1876, after ships had been deliberately overloaded and sunk for the
 insurance. The mark is painted on the outside of the hull, where anyone on the dock can read it.
