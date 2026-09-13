@@ -1,0 +1,30 @@
+{
+  "name": "@plimsoll/backing",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The issuer's real backing for a Plimsoll note: ERC-4626 positions on Base, with status, deposit and withdraw commands that simulate unless told to send.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "prebuild": "node scripts/ensure-attestor.mjs",
+    "build": "tsc -p tsconfig.json",
+    "plan": "npm run -s build && node dist/src/emit-plan.js",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "status": "npm run -s build && node dist/src/cli.js status",
+    "deposit": "npm run -s build && node dist/src/cli.js deposit",
+    "withdraw": "npm run -s build && node dist/src/cli.js withdraw",
+    "test": "npm run build && node --test \"dist/test/*.test.js\"",
+    "test:fork": "npm run build && node --test dist/test/fork.test.js"
+  },
+  "dependencies": {
+    "@plimsoll/attestor": "file:../attestor",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "typescript": "^5.6.0"
+  }
+}
