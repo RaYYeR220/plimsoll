@@ -49,7 +49,7 @@ The first run installs and builds what it needs and takes a few minutes. After t
 seconds. Three outcomes, and no fourth: a line passes, fails, or is skipped with its reason.
 Nothing that could not be checked is reported as a pass.
 
-**Last full run, 2026-09-13: 46 passed, 0 failed, 5 skipped.** One thing that run cannot tell you
+**Last full run, 2026-09-13: 43 passed, 0 failed, 4 skipped.** One thing that run cannot tell you
 on its own, so it is said here: the anchored attestation records it checks were computed from
 fixture readings, and each record says so in its own `feed` field. No live coverage figure exists
 yet; [MOCKS.md](MOCKS.md) says exactly why.

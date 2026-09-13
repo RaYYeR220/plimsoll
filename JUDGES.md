@@ -13,7 +13,7 @@ mirror node, Sourcify, GitHub and substreams.dev. Every line is a pass, a fail, 
 reason. Nothing that could not be checked is reported as a pass, and a superseded deployment is
 listed as history rather than quietly verified as live.
 
-**What it printed on 2026-09-13: 46 passed, 0 failed, 5 skipped.** Add `-- --links` for a public
+**What it printed on 2026-09-13: 43 passed, 0 failed, 4 skipped.** Add `-- --links` for a public
 URL beside each line, or `-- --json` for machine-readable output.
 
 Read section 5 with one fact in mind. It proves the x402 records are signed, paid or not paid, and
