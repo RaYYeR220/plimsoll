@@ -100,19 +100,34 @@ function shapeRow(ctx: Context, topicId: string, expected: ManifestRecord, loade
   if (problems.length) return fail(title, problems.join("; "), evidence);
 
   const r = loaded.record;
+  // The feed is reported on every line rather than only where it is unusual: a
+  // reader should not have to know that its absence would have meant anything.
+  const feed = r.feed ? ` · feed ${r.feed}` : "";
   const detail =
     expected.expect === "attested"
-      ? `v${r.v} · ${r.n} · ${r.bps} bps ≥ ${r.floor} · ${loaded.bytes} B · attestor ${short(r.att)}`
+      ? `v${r.v} · ${r.n} · ${r.bps} bps ≥ ${r.floor} · ${loaded.bytes} B · attestor ${short(r.att)}${feed}`
       : expected.expect === "asset-refusal"
-        ? `v${r.v} · ${r.rsn} · ${r.bps} bps · ${loaded.bytes} B`
-        : `v${r.v} · ${r.rsn} · no figure published · ${loaded.bytes} B`;
+        ? `v${r.v} · ${r.rsn} · ${r.bps} bps · ${loaded.bytes} B${feed}`
+        : `v${r.v} · ${r.rsn} · no figure published · ${loaded.bytes} B${feed}`;
   return pass(title, detail, evidence);
 }
 
 export function shapeProblems(record: Json, expected: ManifestRecord, attestor?: string): string[] {
   const problems: string[] = [];
+  const format = expected.format ?? 3;
   if (record.p !== "plimsoll/coverage") problems.push(`format ${JSON.stringify(record.p)}`);
-  if (record.v !== 2) problems.push(`declares v${record.v}, expected v2`);
+  if (record.v !== format) problems.push(`declares v${record.v}, expected v${format}`);
+
+  // From v3 a record has to carry what makes it checkable on its own: the note
+  // id the oracle knows, the oracle and chain its signature is bound to, the
+  // account a charge would have credited, and where the readings came from.
+  // `feed` is the one that stops a fixture-derived record being read as a
+  // measurement once the document explaining it is gone.
+  if (format >= 3) {
+    for (const key of ["nid", "orc", "cid", "pay", "feed"]) {
+      if (!(key in record)) problems.push(`declares v${format} but omits ${key}`);
+    }
+  }
   if (expected.noteId && record.n !== expected.noteId) problems.push(`note ${record.n}, expected ${expected.noteId}`);
   if (attestor && !sameAddress(record.att, attestor)) {
     problems.push(`signed by ${record.att}, the record's attestor is ${attestor}`);

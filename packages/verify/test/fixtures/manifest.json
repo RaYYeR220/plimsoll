@@ -1,5 +1,5 @@
 {
-  "comment": "Test fixture: the real manifest, with its substreams.yaml pointed at a fixture so the unit tests do not depend on another package being checked out.",
+  "comment": "Test fixture: the real manifest, with its substreams.yaml pointed at a fixture so the unit tests do not depend on another package being checked out. The records are pinned to format 2, which is what the frozen fixture records in fakes.ts are written in.",
   "eventWindow": {
     "start": "2026-09-04T12:00:00-04:00",
     "label": "ETHOnline 2026 build window"
@@ -15,19 +15,22 @@
         "sequence": 17,
         "expect": "attested",
         "noteId": "NOTE-ALPHA",
-        "payment": "0.0.7162784@1789121899.540907773"
+        "payment": "0.0.7162784@1789121899.540907773",
+        "format": 2
       },
       {
         "sequence": 18,
         "expect": "asset-refusal",
         "noteId": "NOTE-BRAVO",
-        "reason": "coverage_below_floor"
+        "reason": "coverage_below_floor",
+        "format": 2
       },
       {
         "sequence": 19,
         "expect": "evidence-refusal",
         "noteId": "NOTE-INDIA",
-        "reason": "source_unavailable"
+        "reason": "source_unavailable",
+        "format": 2
       }
     ]
   },
@@ -36,6 +39,7 @@
     "pullRequest": 55
   },
   "substreams": {
-    "manifest": "substreams.yaml"
+    "manifest": "substreams.yaml",
+    "published": { "name": "plimsoll-erc4626", "version": "v0.2.0", "modules": 12, "requires": ["map_positions"] }
   }
 }

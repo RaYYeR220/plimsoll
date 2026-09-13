@@ -76,6 +76,12 @@ export interface ManifestRecord {
   noteId?: string;
   reason?: string;
   payment?: string;
+  /**
+   * Anchor format this record is expected to declare. Defaults to the current
+   * one. Older records stay on the topic forever and are held to the format
+   * they were written in, so the expectation has to be per record.
+   */
+  format?: number;
 }
 
 export interface Manifest {
@@ -86,7 +92,22 @@ export interface Manifest {
     refusalWindowSeconds?: { before: number; after: number };
   };
   github?: { repository: string; pullRequest: number };
-  substreams?: { manifest: string };
+  substreams?: {
+    manifest: string;
+    /**
+     * The release we claim is on the registry, and what it must contain. It is
+     * fetched from the registry by name and its contents read from the package
+     * itself, the way a stranger would, never from the local `substreams.yaml`.
+     */
+    published?: {
+      name: string;
+      version: string;
+      /** Module count, imported modules included. */
+      modules?: number;
+      /** Modules the release must carry. */
+      requires?: string[];
+    };
+  };
 }
 
 export interface DeviceStep {

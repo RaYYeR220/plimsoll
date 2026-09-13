@@ -33,6 +33,7 @@ export const PUBLIC_INTERVALS_MS: Record<string, number> = {
   "sourcify.dev": 250,
   "api.github.com": 1000,
   "substreams.dev": 500,
+  "spkg.io": 500,
 };
 
 const RETRYABLE = new Set([429, 500, 502, 503, 504]);
@@ -92,11 +93,13 @@ export interface Endpoints {
   sourcify: string;
   github: string;
   substreams: string;
+  /** The registry's package download host, which the Substreams CLI resolves `name@version` through. */
+  spkg: string;
 }
 
 /**
- * The mirror node comes from the deployment record; the other three are the
- * public services themselves, not deployment data.
+ * The mirror node comes from the deployment record; the others are the public
+ * services themselves, not deployment data.
  */
 export function publicEndpoints(mirrorFromRecord: string): Endpoints {
   return {
@@ -104,6 +107,7 @@ export function publicEndpoints(mirrorFromRecord: string): Endpoints {
     sourcify: "https://sourcify.dev/server",
     github: "https://api.github.com",
     substreams: "https://substreams.dev",
+    spkg: "https://spkg.io",
   };
 }
 

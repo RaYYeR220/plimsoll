@@ -27,6 +27,7 @@ export const ENDPOINTS: Endpoints = {
   sourcify: "http://sourcify.test/server",
   github: "http://github.test",
   substreams: "http://substreams.test",
+  spkg: "http://spkg.test",
 };
 
 /** `function_parameters` of the record's transferByPartition, as the mirror node returns it. */
@@ -112,7 +113,10 @@ export interface World {
   /** Addresses Sourcify reports as exact matches. */
   verified: Set<string>;
   github: { status: number; body: Json; headers?: Record<string, string> } | "unreachable";
+  /** Status the registry answers the package download with. */
   substreams: number | "unreachable";
+  /** The package bytes it serves when that status is 200. */
+  substreamsPackage: Uint8Array;
 }
 
 export const SELLER = "0.0.10448897";
@@ -146,6 +150,48 @@ export function paymentTransaction(id: string, consensus: string, amount = 100_0
       { account: PAYER, amount: -amount },
     ],
   };
+}
+
+/** The module list of the published v0.2.0, as read out of the package on spkg.io. */
+export const PUBLISHED_MODULES = [
+  "map_flows",
+  "store_vault_seen",
+  "map_vault_probes",
+  "store_vault_registry",
+  "map_vault_blocks",
+  "store_vault_state",
+  "store_accounts",
+  "store_totals",
+  "map_messari",
+  "store_asset_prices",
+  "map_positions",
+  "erc4626:map_events",
+];
+
+function varint(value: number): number[] {
+  const out: number[] = [];
+  while (value > 127) {
+    out.push((value % 128) | 0x80);
+    value = Math.floor(value / 128);
+  }
+  out.push(value);
+  return out;
+}
+
+function lengthDelimited(no: number, payload: Uint8Array): Uint8Array {
+  return Uint8Array.from([...varint(no * 8 + 2), ...varint(payload.length), ...payload]);
+}
+
+function concat(parts: Uint8Array[]): Uint8Array {
+  return Uint8Array.from(parts.flatMap((part) => [...part]));
+}
+
+/** A minimal `sf.substreams.v1.Package`: the module names and the package's own metadata. */
+export function encodePackage(name: string, version: string, modules: readonly string[]): Uint8Array {
+  const text = (value: string) => new TextEncoder().encode(value);
+  const moduleList = concat(modules.map((module) => lengthDelimited(1, lengthDelimited(1, text(module)))));
+  const meta = concat([lengthDelimited(1, text(version)), lengthDelimited(3, text(name))]);
+  return concat([lengthDelimited(6, moduleList), lengthDelimited(8, meta)]);
 }
 
 export function buildWorld(inputs: Inputs): World {
@@ -287,7 +333,8 @@ export function buildWorld(inputs: Inputs): World {
         changed_files: 18,
       },
     },
-    substreams: 404,
+    substreams: 200,
+    substreamsPackage: encodePackage("plimsoll_erc4626", "v0.2.0", PUBLISHED_MODULES),
   };
 }
 
@@ -306,9 +353,13 @@ export function fakeHttp(world: World): typeof fetch {
       if (world.github === "unreachable") throw new TypeError("fetch failed");
       return json(world.github.status, world.github.body, world.github.headers);
     }
-    if (url.host === "substreams.test") {
+    if (url.host === "spkg.test") {
       if (world.substreams === "unreachable") throw new TypeError("fetch failed");
-      return new Response("", { status: world.substreams });
+      if (world.substreams !== 200) return new Response("", { status: world.substreams });
+      // Copied into a fresh ArrayBuffer: a Uint8Array view may sit on a shared
+      // buffer, which is not a valid response body.
+      const body = new Uint8Array(world.substreamsPackage).buffer as ArrayBuffer;
+      return new Response(body, { status: 200, headers: { "content-type": "application/octet-stream" } });
     }
     throw new Error(`unexpected request to ${url}`);
   }) as typeof fetch;

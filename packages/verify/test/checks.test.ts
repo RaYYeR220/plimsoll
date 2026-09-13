@@ -10,7 +10,17 @@ import { checkCashLeg } from "../src/checks/token.js";
 import { encodeContractKey } from "../src/protobufKey.js";
 import { parseSubstreamsPackage, supersededGenerations } from "../src/inputs.js";
 import type { CheckResult } from "../src/result.js";
-import { BEFORE_WINDOW, BUYER, buildWorld, find, makeContext, realInputs } from "./fakes.js";
+import {
+  BEFORE_WINDOW,
+  BUYER,
+  PUBLISHED_MODULES,
+  buildWorld,
+  encodePackage,
+  find,
+  makeContext,
+  realInputs,
+} from "./fakes.js";
+import { readPackage } from "../src/spkg.js";
 
 const failures = (rows: CheckResult[]) => rows.filter((r) => r.status === "fail");
 
@@ -258,29 +268,72 @@ describe("6 · the pull request", () => {
 });
 
 describe("7 · the Substreams package", () => {
-  it("reports an unpublished package as skipped, not failed", async () => {
-    const { ctx } = setup();
+  it("reads the published release from the registry and finds the modules it must carry", async () => {
+    const { ctx, inputs } = setup();
+    const published = inputs.manifest.substreams!.published!;
     const [row] = await checkSubstreams(ctx);
-    assert.equal(row!.status, "skip");
-    assert.match(row!.detail, /^not yet published/);
-    const yaml = parseSubstreamsPackage(readFileSync(ctx.inputs.substreams!.manifestPath, "utf8"))!;
-    assert.equal(row!.title, `${yaml.name} ${yaml.version} on substreams.dev`, "name and version come from substreams.yaml");
+    assert.equal(row!.status, "pass", row!.detail);
+    assert.equal(row!.title, `${published.name} ${published.version} on substreams.dev`);
+    assert.match(row!.detail, /12 modules/);
+    assert.match(row!.detail, /map_positions present/);
   });
 
-  it("says the package file is missing from the checkout, rather than blaming the manifest", async () => {
+  it("stands on the registry alone, with no substreams.yaml in the checkout", async () => {
     const { inputs, world } = setup();
     inputs.substreams = null;
     inputs.substreamsManifest = join(inputs.repoRoot, "packages", "substreams", "not-here.yaml");
     const [row] = await checkSubstreams(makeContext(inputs, world));
-    assert.equal(row!.status, "skip");
-    assert.match(row!.detail, /not-here[.]yaml is not in this checkout/);
+    assert.equal(row!.status, "pass", "a claim about what is published never consults our own sources");
   });
 
-  it("passes once it is published, and skips when the registry is unreachable", async () => {
-    const { world, inputs } = setup();
-    world.substreams = 200;
-    assert.equal((await checkSubstreams(makeContext(inputs, world)))[0]!.status, "pass");
+  it("fails a release that shipped without a module it is claimed to carry", async () => {
+    // What v0.1.1 really shipped: ten modules, without map_positions or store_asset_prices.
+    const { inputs, world } = setup();
+    world.substreamsPackage = encodePackage(
+      "plimsoll_erc4626",
+      "v0.2.0",
+      PUBLISHED_MODULES.filter((m) => m !== "map_positions" && m !== "store_asset_prices"),
+    );
+    const [row] = await checkSubstreams(makeContext(inputs, world));
+    assert.equal(row!.status, "fail");
+    assert.match(row!.detail, /10 modules, expected 12/);
+    assert.match(row!.detail, /missing map_positions/);
+  });
+
+  it("fails when the registry serves a different version from the one asked for", async () => {
+    const { inputs, world } = setup();
+    world.substreamsPackage = encodePackage("plimsoll_erc4626", "v0.1.2", PUBLISHED_MODULES);
+    const [row] = await checkSubstreams(makeContext(inputs, world));
+    assert.equal(row!.status, "fail");
+    assert.match(row!.detail, /declares v0[.]1[.]2/);
+  });
+
+  it("fails bytes that are not a package, rather than reading them as an empty one", async () => {
+    const { inputs, world } = setup();
+    world.substreamsPackage = new TextEncoder().encode("<html>not found</html>");
+    const [row] = await checkSubstreams(makeContext(inputs, world));
+    assert.equal(row!.status, "fail");
+    assert.match(row!.detail, /not a Substreams package/);
+  });
+
+  it("fails when the registry does not have the release the manifest claims", async () => {
+    const { inputs, world } = setup();
+    world.substreams = 404;
+    const [row] = await checkSubstreams(makeContext(inputs, world));
+    assert.equal(row!.status, "fail");
+    assert.match(row!.detail, /the registry has no such package/);
+  });
+
+  it("skips when the registry is unreachable", async () => {
+    const { inputs, world } = setup();
     world.substreams = "unreachable";
-    assert.equal((await checkSubstreams(makeContext(inputs, world)))[0]!.status, "skip");
+    const [row] = await checkSubstreams(makeContext(inputs, world));
+    assert.equal(row!.status, "skip");
+    assert.match(row!.detail, /unreachable/);
+  });
+
+  it("decodes what it encodes, including imported module names", () => {
+    const pkg = readPackage(encodePackage("plimsoll_erc4626", "v0.2.0", PUBLISHED_MODULES));
+    assert.deepEqual(pkg, { name: "plimsoll_erc4626", version: "v0.2.0", modules: PUBLISHED_MODULES });
   });
 });

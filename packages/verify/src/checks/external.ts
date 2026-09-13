@@ -1,7 +1,6 @@
-import { existsSync } from "node:fs";
-import { relative, sep } from "node:path";
 import type { Context } from "../context.js";
 import { type CheckResult, describe, fail, pass, skip } from "../result.js";
+import { readPackage } from "../spkg.js";
 
 /**
  * Checks 6 and 7: the two claims that live outside our infrastructure.
@@ -63,35 +62,60 @@ export async function checkGithub(ctx: Context): Promise<CheckResult[]> {
   return [fail(title, `closed without being merged · ${facts}`, body.html_url)];
 }
 
+/**
+ * The published release, read from the registry the way a stranger would.
+ *
+ * The package is fetched by name and version from the registry's download
+ * endpoint — the same one the Substreams CLI resolves `name@version` through —
+ * and its module list is read out of the package bytes. Nothing here reads the
+ * local `substreams.yaml`: a claim about what is published has to stand on what
+ * the registry serves, and a check that consulted our own sources would pass a
+ * release that shipped without the modules those sources describe. That is not
+ * hypothetical; v0.1.1 went out missing `map_positions`.
+ */
 export async function checkSubstreams(ctx: Context): Promise<CheckResult[]> {
-  const pkg = ctx.inputs.substreams;
-  if (!pkg) {
-    // Say which of three things is true, rather than blaming the manifest for a
-    // file this checkout simply does not carry.
-    const named = ctx.inputs.substreamsManifest;
-    const shown = named ? relative(ctx.inputs.repoRoot, named).split(sep).join("/") : null;
-    const reason = !named
-      ? "the manifest names no substreams.yaml"
-      : !existsSync(named)
-        ? `${shown} is not in this checkout, so there is no package to look up`
-        : `${shown} has no package name and version`;
-    return [skip("Substreams package", reason)];
-  }
-  const title = `${pkg.name} ${pkg.version} on substreams.dev`;
-  const url = `${ctx.endpoints.substreams}/packages/${pkg.name}/${pkg.version}`;
+  const published = ctx.manifest.substreams?.published;
+  if (!published) return [skip("Substreams package", "the manifest names no published release")];
+
+  const title = `${published.name} ${published.version} on substreams.dev`;
+  const page = `${ctx.endpoints.substreams}/packages/${published.name}/${published.version}`;
+  const download = `${ctx.endpoints.spkg}/v1/packages/${published.name}/${published.version}`;
 
   let response: Response;
   try {
-    response = await ctx.http(url);
+    response = await ctx.http(download);
   } catch (error) {
-    return [skip(title, `substreams.dev is unreachable (${describe(error)})`)];
+    return [skip(title, `the registry is unreachable (${describe(error)})`)];
   }
-  await response.body?.cancel().catch(() => {});
-  if (response.status === 200) return [pass(title, "published", url)];
   if (response.status === 404) {
-    return [
-      skip(title, "not yet published: the package is built from packages/substreams but not released to the registry"),
-    ];
+    await response.body?.cancel().catch(() => {});
+    // We are the ones asserting this release exists, so the registry saying
+    // otherwise contradicts the claim rather than failing to confirm it.
+    return [fail(title, "the manifest claims this release is published; the registry has no such package", page)];
   }
-  return [skip(title, `substreams.dev returned HTTP ${response.status}`)];
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
+    return [skip(title, `the registry returned HTTP ${response.status} for ${download}`)];
+  }
+
+  let pkg;
+  try {
+    pkg = readPackage(new Uint8Array(await response.arrayBuffer()));
+  } catch (error) {
+    return [fail(title, `the registry served something that is not a Substreams package (${describe(error)})`, page)];
+  }
+
+  const problems: string[] = [];
+  if (pkg.version !== published.version) {
+    problems.push(`the package it served declares ${pkg.version ?? "no version"}`);
+  }
+  if (published.modules !== undefined && pkg.modules.length !== published.modules) {
+    problems.push(`${pkg.modules.length} modules, expected ${published.modules}`);
+  }
+  const missing = (published.requires ?? []).filter((module) => !pkg.modules.includes(module));
+  if (missing.length > 0) problems.push(`missing ${missing.join(", ")}`);
+  if (problems.length > 0) return [fail(title, problems.join("; "), page)];
+
+  const present = (published.requires ?? []).map((module) => ` · ${module} present`).join("");
+  return [pass(title, `published · ${pkg.modules.length} modules${present}`, page)];
 }

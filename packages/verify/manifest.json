@@ -9,19 +9,19 @@
     "refusalWindowSeconds": { "before": 120, "after": 300 },
     "records": [
       {
-        "sequence": 17,
+        "sequence": 22,
         "expect": "attested",
-        "noteId": "NOTE-ALPHA",
-        "payment": "0.0.7162784@1789121899.540907773"
+        "noteId": "PLIM-B",
+        "payment": "0.0.7162784@1789172046.246807405"
       },
       {
-        "sequence": 18,
+        "sequence": 23,
         "expect": "asset-refusal",
-        "noteId": "NOTE-BRAVO",
+        "noteId": "PLIM-A",
         "reason": "coverage_below_floor"
       },
       {
-        "sequence": 19,
+        "sequence": 24,
         "expect": "evidence-refusal",
         "noteId": "NOTE-INDIA",
         "reason": "source_unavailable"
@@ -33,6 +33,8 @@
     "pullRequest": 55
   },
   "substreams": {
-    "manifest": "../substreams/substreams.yaml"
+    "comment": "The release is fetched from the registry by name and its module list read from the package bytes, never from the local substreams.yaml. The registry spells the package with hyphens and the package metadata with underscores; that is the registry naming, not a typo.",
+    "manifest": "../substreams/substreams.yaml",
+    "published": { "name": "plimsoll-erc4626", "version": "v0.2.0", "modules": 12, "requires": ["map_positions"] }
   }
 }

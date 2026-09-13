@@ -21,18 +21,21 @@ seconds.
 | 4 | The HTS cash token's freeze key is a contract key naming `CashLegController`, and there is no admin key | the mirror node renders contract keys as `ProtobufEncoded`, so the key bytes are decoded |
 | 5 | The canonical HCS records have the shape their kind promises. The paid attestation's transfer exists. The two refusals have no transfer | each record goes through the attestor's own `verify-charge`, from the public topic alone. The absence of a charge is then checked on the ledger (see below) |
 | 6 | hedera-harness pull request #55 is open | public GitHub API, one request |
-| 7 | The Substreams package is on substreams.dev | reported as skipped until it is published |
+| 7 | `plimsoll-erc4626` v0.2.0 is published, with its 12 modules and `map_positions` | the package is downloaded from the registry by name and version, the way the Substreams CLI resolves it, and its module list is read out of the package bytes. The local `substreams.yaml` is never consulted: v0.1.1 shipped without `map_positions` although the sources had it, and only the published bytes show that |
 | 8 | The live Ledger sequence: device approvals, the value binding, the wrong-key and wrong-door reverts | each device signature is recovered offline from its exact mandate text. Each transaction is compared with the proof on the mirror node, and reverts are decoded with the error ABI read from the contracts' own Solidity |
 
 ### Proving a refusal was not charged
 
-A refusal has no transaction, so there is nothing to look up. The anchored record
-does not name the seller's account either, so `verify-charge` given only the
-public record cannot check the ledger for it. This package takes the seller from
-the paid attestation's own transfer. It then lists every credit to that account
-from two minutes before the refusal to five minutes after, which is x402's
-maximum authorisation window. Each credit must be claimed by some anchored
-attestation. A credit nobody signed for is a charge for a refusal, and fails.
+A refusal has no transaction, so there is nothing to look up. From anchor format
+v3 the record names the seller's account in `pay`, which is what makes the claim
+falsifiable from the public topic alone, and `verify-charge` checks it there.
+
+This package checks it a second time without taking the record's word for which
+account to watch: the seller is read from the paid attestation's own transfer on
+the ledger. It then lists every credit to that account from two minutes before
+the refusal to five minutes after, which is x402's maximum authorisation window.
+Each credit must be claimed by some anchored attestation. A credit nobody signed
+for is a charge for a refusal, and fails.
 
 ## Read, never hardcode
 
@@ -93,7 +96,7 @@ that actually succeeded, and a planted payment id. Each must come back ✗.
 
 ## What this does not check
 
-- **The coverage figures themselves.** The attestor's coverage source is still fixtures (see `packages/attestor/MOCKS.md`). This recomputes each ratio from the anchored readings, but cannot yet re-read the vaults, because they are not deployed.
+- **The coverage figures themselves.** The canonical anchored records are produced from fixtures (see `packages/attestor/MOCKS.md`). This recomputes each ratio from the anchored readings and checks the payment biconditional, but does not re-read the vaults. Each record says which source produced it in `feed`, and that value is printed on every line of section 5, so a simulated reading cannot be read as a measurement.
 - **Sourcify for ATS contracts.** The note is deployed by the ATS factory from ATS's source, and the record does not claim it is verified.
 - **Anything beyond what the public mirror node reports.** That is the trust root for everything here, as it would be for any stranger.
 - **Charges older than the latest hundred anchored records.** The absence check reads those to see which credits are claimed. A refusal whose window held a charge from further back would be misreported, which would take more than a hundred anchors inside seven minutes.
